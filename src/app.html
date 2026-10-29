@@ -1,0 +1,1811 @@
+<title>NCE Statement Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+/* Layout: ledger workbook. Fixed left index of notes, working sheet on the right; statements set like a printed schedule. */
+:root {
+  --paper: #fafbf9;
+  --sheet: #ffffff;
+  --ink: #1b2420;
+  --muted: #5d6a64;
+  --rule: #dfe5e1;
+  --rule-strong: #b9c4be;
+  --accent: #1d5b47;
+  --accent-soft: #e5efea;
+  --entry: #1f4fbf;          /* blue ink = typed figure, the spreadsheet convention */
+  --entry-bg: #f3f6fd;
+  --good: #1f7a4a;
+  --warn: #9a6100;
+  --bad: #b3261e;
+  --bad-soft: #fbeceb;
+  --warn-soft: #fbf3e2;
+  --good-soft: #e6f3eb;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-doc: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-sheet: "Trebuchet MS", "Lucida Grande", "Segoe UI", sans-serif;
+  --paper-bg: #ffffff;
+  --paper-ink: #000000;
+  --paper-line: #000000;
+  --paper-muted: #444444;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111614; --sheet: #171d1a; --ink: #e3e9e5; --muted: #95a39c;
+    --rule: #28312d; --rule-strong: #3c4842; --accent: #7cc4a6; --accent-soft: #1d2c26;
+    --entry: #8fb1ff; --entry-bg: #1a2130; --good: #6fcf97; --warn: #e2b04a; --bad: #ff8a80;
+    --bad-soft: #3a1f1d; --warn-soft: #33290f; --good-soft: #17301f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111614; --sheet: #171d1a; --ink: #e3e9e5; --muted: #95a39c;
+  --rule: #28312d; --rule-strong: #3c4842; --accent: #7cc4a6; --accent-soft: #1d2c26;
+  --entry: #8fb1ff; --entry-bg: #1a2130; --good: #6fcf97; --warn: #e2b04a; --bad: #ff8a80;
+  --bad-soft: #3a1f1d; --warn-soft: #33290f; --good-soft: #17301f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--sheet); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--sheet); border-bottom: 1px solid var(--rule);
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+}
+.brand { font-family: var(--font-doc); font-weight: 600; font-size: 17px; letter-spacing: .01em; margin-right: 4px; }
+.brand small { font-family: var(--font-ui); font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+.top .grow { flex: 1 1 auto; }
+.entity-pick { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.entity-pick select { max-width: 240px; }
+select, .btn, input.txt, textarea {
+  border: 1px solid var(--rule-strong); background: var(--sheet); border-radius: 6px; padding: 6px 10px;
+}
+.btn { background: var(--sheet); white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--sheet); border-color: var(--accent); }
+.btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.small { padding: 3px 8px; font-size: 12.5px; }
+.status { color: var(--muted); font-size: 12.5px; }
+.pill { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 500; border: 0; }
+.pill.ok { background: var(--good-soft); color: var(--good); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+
+.app { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: calc(100vh - 60px); }
+nav.side {
+  border-right: 1px solid var(--rule); background: var(--sheet); padding: 14px 10px 40px;
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 57px); align-self: start;
+  height: calc(100vh - 57px); overflow-y: auto;
+}
+nav.side h4 { margin: 14px 8px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+nav.side a { display: grid; grid-template-columns: 34px 1fr; gap: 4px; padding: 5px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 13.5px; }
+nav.side a .no { color: var(--muted); font-variant-numeric: tabular-nums; }
+nav.side a:hover { background: var(--accent-soft); }
+nav.side a.on { background: var(--accent); color: var(--sheet); }
+nav.side a.on .no { color: inherit; opacity: .8; }
+.mobile-nav { display: none; }
+
+main {
+  padding-block: 20px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  min-width: 0;
+}
+.page { max-width: 1100px; margin: 0 auto; display: grid; gap: 18px; }
+.page-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.page-head h1 { font-family: var(--font-doc); font-weight: 600; font-size: 24px; margin: 0; text-wrap: balance; }
+.page-head h1 .nno { color: var(--accent); margin-right: 8px; }
+.lead { color: var(--muted); margin: 0; max-width: 70ch; }
+.banner { background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.banner b { color: var(--warn); }
+
+.sheet { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; }
+.scroll { overflow-x: auto; }
+table.grid { border-collapse: collapse; width: 100%; font-family: var(--font-sheet); font-size: 13.5px; color: var(--paper-ink); background: var(--paper-bg); font-variant-numeric: tabular-nums; border: 1px solid var(--paper-line); }
+table.grid th, table.grid td { padding: 3px 7px; text-align: left; vertical-align: middle; }
+table.grid thead th { font-weight: 700; color: var(--paper-ink); border: 1px solid var(--paper-line); white-space: nowrap; text-align: center; }
+table.grid thead th:nth-child(2) { text-align: left; }
+table.grid thead tr.grp th:empty { border-top-color: transparent; border-left-color: transparent; }
+table.grid th.num, table.grid td.num { text-align: right; width: 150px; min-width: 120px; border-left: 1px solid var(--paper-line); border-right: 1px solid var(--paper-line); }
+table.grid td.tag { width: 40px; color: var(--paper-ink); white-space: nowrap; text-align: center; border-right: 1px solid var(--paper-line); }
+table.grid tr.sec td { font-weight: 700; text-decoration: underline; padding-top: 10px; }
+table.grid tr.sec td.num, table.grid tr.hd td.num { text-decoration: none; }
+table.grid tr.hd td { font-weight: 700; }
+table.grid tr.sub td { font-weight: 700; }
+table.grid tr.sub td.num { border-top: 1px solid var(--paper-line); border-bottom: 1px solid var(--paper-line); }
+table.grid tr.tot td { font-weight: 700; }
+table.grid tr.tot td.num { border-top: 1px solid var(--paper-line); border-bottom: 3px double var(--paper-line); }
+table.grid tr.memo td { color: var(--paper-muted); }
+table.grid tr.indent td.lbl { padding-left: 22px; }
+table.grid .status { color: var(--paper-muted); }
+table.grid.fa thead th { white-space: normal; }
+table.grid.fa th.num, table.grid.fa td.num { min-width: 96px; width: auto; }
+table.grid.fa td.lbl { min-width: 170px; }
+table.grid input.amt { background: #eef3fd; color: #1f4fbf; font-family: var(--font-sheet); }
+table.grid input.amt.t { color: var(--paper-ink); }
+table.grid input.amt:focus { background: #ffffff; border-color: #1f4fbf; }
+table.grid input.lbl-in { color: var(--paper-ink); border-color: #9aa3a0; font-family: var(--font-sheet); }
+table.grid .auto { color: #1d5b47; border-color: #1d5b47; }
+table.grid .link { color: #1d5b47; }
+table.grid .btn { background: #ffffff; color: var(--paper-ink); border-color: #9aa3a0; }
+table.grid .rowx { color: #666666; }
+td.calc { text-align: right; padding-right: 12px !important; }
+.auto { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 1px; }
+input.amt {
+  width: 100%; min-width: 100px; text-align: right; border: 1px solid transparent; background: var(--entry-bg); color: var(--entry);
+  border-radius: 4px; padding: 5px 6px; font-variant-numeric: tabular-nums;
+}
+input.amt:hover { border-color: var(--rule-strong); }
+input.amt:focus { border-color: var(--entry); background: var(--sheet); outline: none; }
+input.amt.t { text-align: left; color: var(--ink); }
+input.lbl-in { width: 100%; min-width: 160px; border: 1px dashed var(--rule-strong); background: transparent; border-radius: 4px; padding: 4px 6px; }
+.na { color: var(--muted); text-align: center; font-size: 12px; }
+.rowx { border: 0; background: none; color: var(--muted); padding: 0 4px; font-size: 16px; line-height: 1; }
+.rowx:hover { color: var(--bad); }
+.addrow td { padding-block: 4px; }
+.link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; background: none; border: 0; padding: 0; }
+
+.foot { padding: 12px 14px; display: grid; gap: 6px; }
+.foot label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+textarea { width: 100%; min-height: 70px; resize: vertical; line-height: 1.5; }
+textarea.big { min-height: 260px; }
+
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; padding: 16px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.field input, .field select { width: 100%; }
+.check { display: flex; gap: 8px; align-items: flex-start; padding: 12px 16px; border-top: 1px solid var(--rule); }
+
+/* Statements: set as a printed schedule */
+.stmt { padding: 24px 26px; background: var(--paper-bg); color: var(--paper-ink); font-family: var(--font-sheet); font-size: 13.5px; border-radius: 10px; }
+.stmt .ent { font-weight: 700; margin: 0; }
+.stmt .ttl { font-weight: 700; margin: 0 0 4px; }
+.stmt .unit { text-align: right; font-weight: 700; margin-bottom: 2px; }
+table.st { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; border: 1px solid var(--paper-line); }
+table.st th { text-align: center; border: 1px solid var(--paper-line); padding: 4px 8px; white-space: nowrap; font-weight: 700; }
+table.st th:nth-child(1) { border-right: 0; }
+table.st th:nth-child(2) { text-align: left; border-left: 0; }
+table.st td { padding: 2px 8px; }
+table.st td.tag { width: 46px; text-align: center; }
+table.st td.lb { border-right: 1px solid var(--paper-line); }
+table.st td.nt { width: 56px; text-align: center; border-right: 1px solid var(--paper-line); }
+table.st td.v { width: 150px; text-align: right; border-left: 1px solid var(--paper-line); border-right: 1px solid var(--paper-line); }
+table.st td.gap, table.st th.gap { width: 4px; padding: 0; border-top-color: transparent; border-bottom-color: transparent; }
+table.st tr.h td { font-weight: 700; padding-top: 8px; }
+table.st tr.s td.v { border-top: 1px solid var(--paper-line); border-bottom: 1px solid var(--paper-line); font-weight: 700; }
+table.st tr.T td { font-weight: 700; }
+table.st tr.T td.v { border-top: 1px solid var(--paper-line); border-bottom: 3px double var(--paper-line); }
+table.st tr.rr td.lb { padding-left: 26px; }
+table.st .link { color: var(--paper-ink); }
+.stmt .status { color: var(--paper-muted); }
+.sig { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 34px; font-size: 13px; }
+.sig > div:last-child { text-align: right; }
+.sig .line { margin-top: 36px; }
+.accomp { margin-top: 14px; font-size: 13px; color: var(--muted); }
+
+.checks { display: grid; gap: 8px; }
+.chk { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 10px 14px; border-radius: 8px; }
+.chk.ok { background: var(--good-soft); } .chk.bad { background: var(--bad-soft); } .chk.warn { background: var(--warn-soft); }
+.chk .ic { font-weight: 700; }
+.chk.ok .ic { color: var(--good); } .chk.bad .ic { color: var(--bad); } .chk.warn .ic { color: var(--warn); }
+
+.tabs { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: 8px; overflow: hidden; }
+.tabs button { border: 0; background: var(--sheet); padding: 6px 14px; }
+.tabs button.on { background: var(--accent); color: var(--sheet); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toast { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--sheet); padding: 10px 14px; border-radius: 8px; z-index: 50; max-width: 360px; }
+.confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: var(--bad-soft); border-radius: 8px; }
+
+#printArea { display: none; }
+@media print {
+  @page { size: A4 portrait; margin: 10mm 10mm 12mm; }
+  @page land { size: A4 landscape; margin: 10mm 10mm 12mm; }
+  body { background: #fff !important; }
+  body::before, .top, .app, .toast { display: none !important; }
+  #printArea { display: block; color: #000; font-family: "Trebuchet MS", "Lucida Grande", sans-serif; font-size: 10pt; }
+  #printArea section.pp { break-after: page; }
+  #printArea section.pp:last-child { break-after: auto; }
+  #printArea section.landscape { page: land; }
+  #printArea table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  #printArea td { padding: 0.5pt 3pt; line-height: 1.2; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+}
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  nav.side { display: none; }
+  .mobile-nav { display: block; width: 100%; }
+  .mobile-nav select { width: 100%; }
+  .stmt { padding: 18px 12px; min-width: 560px; }
+  .top { position: static; }
+  .brand small { display: none; }
+  table.st td.v { width: 110px; }
+  .sig { grid-template-columns: 1fr; }
+  .sig > div:last-child { text-align: left; }
+}
+@media (prefers-reduced-motion: no-preference) { nav.side a, .btn { transition: background-color .12s, border-color .12s; } }
+</style>
+
+<header class="top">
+  <div class="brand">NCE Statement Builder<small>ICAI format for non-corporate entities</small></div>
+  <div class="entity-pick">
+    <select id="entitySel" aria-label="Entity"></select>
+    <button class="btn small" id="newEntityBtn">+ New</button>
+  </div>
+  <span class="status" id="saveStatus">Loading…</span>
+  <span class="grow"></span>
+  <button class="pill" id="checkPill">Checking…</button>
+  <button class="btn" id="xlsBtn">Export Excel</button>
+  <button class="btn" id="pdfBtn">Export PDF</button>
+  <button class="btn" id="backupBtn">Backup</button>
+  <label class="btn" for="restoreFile">Restore</label>
+  <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+  <div class="mobile-nav"><select id="mobNav" aria-label="Go to"></select></div>
+</header>
+<div class="app">
+  <nav class="side" id="sideNav"></nav>
+  <main><div class="page" id="page"></div></main>
+</div>
+<div class="toast" id="toast" hidden></div>
+<div id="printArea" aria-hidden="true"></div>
+
+<script>
+"use strict";
+/* ---------------- helpers ---------------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+const num = v => { const n = typeof v === "number" ? v : parseFloat(v); return isFinite(n) ? n : 0; };
+function parseAmt(s) {
+  s = String(s).trim(); if (!s) return 0;
+  let neg = /^\(.*\)$/.test(s) || s.startsWith("-");
+  s = s.replace(/[(),\s₹-]/g, "");
+  const n = parseFloat(s); return isFinite(n) ? (neg ? -n : n) : 0;
+}
+let DEC = 0;
+function fmt(n, dash = true) {
+  n = num(n); if (Math.abs(n) < 0.005) return dash ? "-" : "";
+  const s = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: DEC, maximumFractionDigits: DEC });
+  return n < 0 ? "-" + s : s;
+}
+function fmtIn(n) {
+  n = num(n); if (Math.abs(n) < 0.0000001) return "";
+  const s = Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return n < 0 ? "-" + s : s;
+}
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function dlabel(d) { return d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear(); }
+function dates(S) {
+  const cy = new Date((S.info.fyEnd || "2026-03-31") + "T00:00:00");
+  const py = new Date(cy); py.setFullYear(cy.getFullYear() - 1);
+  const pys = new Date(py); pys.setFullYear(py.getFullYear() - 1); pys.setDate(pys.getDate() + 1);
+  const cys = new Date(py); cys.setDate(cys.getDate() + 1);
+  return { cy: dlabel(cy), py: dlabel(py), pyStart: dlabel(pys), cyStart: dlabel(cys) };
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3200); }
+
+/* ---------------- note definitions ---------------- */
+// row: {k,label,tag,sign,na:[cols],auto:fn(C)->{col:val},indent}; heading: {h,tag}
+const r = (k, label, o = {}) => ({ k, label, ...o });
+const h = (label, tag) => ({ h: label, tag });
+const LOANS_ROWS = [
+  h("Capital advances", "(a)"),
+  r("cap_good", "Considered good", { indent: 1 }),
+  r("cap_doubt", "Considered doubtful", { indent: 1 }),
+  r("cap_prov", "Less: Provision for doubtful advances", { indent: 1, sign: -1 }),
+  r("rel", "Loans and advances to partners / relatives of partners", { tag: "(b)" }),
+  h("Other loans and advances (specify nature)", "(c)"),
+  r("prepaid", "Prepaid expenses", { indent: 1 }),
+  r("advtax", "Advance tax and tax deducted at source [net of provision for income tax]", { indent: 1 }),
+  r("cenvat", "CENVAT credit receivable", { indent: 1 }),
+  r("vat", "VAT credit receivable", { indent: 1 }),
+  r("stax", "Service tax credit receivable", { indent: 1 }),
+  r("gst", "GST input credit receivable", { indent: 1 }),
+  r("sd", "Security deposits", { indent: 1 }),
+  r("govt", "Balances with government authorities", { indent: 1 }),
+];
+const INV_OTHER = (cur) => [
+  h("Other investments"),
+  r("pref", "Investments in preference shares", { tag: "(c)" }),
+  r("eq", "Investments in equity instruments", { tag: "(d)" }),
+  r("govt", "Investments in government or trust securities", { tag: "(e)" }),
+  r("deb", "Investments in debentures or bonds", { tag: "(f)" }),
+  r("mf", "Investments in mutual funds", { tag: "(g)" }),
+  r("prop", "Investment property", { tag: "(h)" }),
+  r("oth", "Other non-current investments (specify nature)", { tag: "(i)" }),
+];
+const INV_TRADE = [
+  r("ent", "Investments in other entities", { tag: "(a)" }),
+  r("prov", "Less: Provision for diminution in value of investments", { sign: -1, indent: 1 }),
+  r("firm", "Investments in partnership firms (give details below)", { tag: "(b)" }),
+];
+const CUR_INV = [
+  r("cm", "Current maturities of long-term investments", { tag: "(a)" }),
+  r("eq", "Investments in equity instruments", { tag: "(b)" }),
+  r("pref", "Investments in preference shares", { tag: "(c)" }),
+  r("govt", "Investments in government or trust securities", { tag: "(d)" }),
+  r("deb", "Investments in debentures or bonds", { tag: "(e)" }),
+  r("mf", "Investments in mutual funds", { tag: "(f)" }),
+  r("oth", "Other short-term investments (specify nature)", { tag: "(g)" }),
+];
+const fromList = (kind, key) => C => S.parties[kind].length ? { cy: C[`${kind}.${key}.cy`], py: C[`${kind}.${key}.py`] } : null;
+const TR_ROWS = age => [
+  r("sec", "Secured, considered good", { tag: "(a)", auto: fromList("debtors", age + ".sec") }),
+  r("unsec", "Unsecured, considered good", { tag: "(b)", auto: fromList("debtors", age + ".unsec") }),
+  r("doubt", "Doubtful", { tag: "(c)", auto: fromList("debtors", age + ".doubt") }),
+  r("prov", "Less: Provision for doubtful receivables", { sign: -1, indent: 1 }),
+];
+const INV_NA = ["fv", "n_cy", "n_py"];
+
+const NOTES = [
+  { id: "n4", no: "4", title: "Reserves and surplus", cols: "C2", grp: "bs",
+    sections: [
+      { id: "res", rows: [
+        r("cap", "Capital reserve", { tag: "(a)" }),
+        r("reval", "Revaluation reserve", { tag: "(b)" }),
+        r("oth", "Other reserve (please specify)", { tag: "(c)" }) ], add: true, noSub: true },
+      { id: "sur", title: "(d) Undistributed surplus (balance in Statement of Profit and Loss)", rows: [
+        r("open", "Opening balance"),
+        r("profit", "Add: Profit/(loss) for the year not allocated to owners' accounts", { auto: C => ({ cy: C["pl.alloc_off.cy"], py: C["pl.alloc_off.py"] }) }),
+        r("trf", "Less: Transferred / distributed", { sign: -1 }) ], add: true, total: "Closing balance" } ],
+    total: "Total" },
+  { id: "n5a", no: "5", sub: "A", title: "Long-term borrowings", cols: "C2", grp: "bs", footLabel: "Terms of borrowings",
+    hint: "Add one line per lender (e.g. HDFC Bank – Vehicle loan, Loan from relatives).",
+    sections: [
+      { id: "sec", title: "Secured loans", add: true, total: "", rows: [] },
+      { id: "unsec", title: "Unsecured loans", add: true, total: "", rows: [] } ],
+    total: "Total",
+    foot: "For each loan: nature of security, rate of interest, number of instalments, EMI and date of last instalment, and any guarantee given by partners." },
+  { id: "n5b", no: "5", sub: "B", title: "Short-term borrowings", cols: "C2", grp: "bs", footLabel: "Terms of borrowings",
+    hint: "Add one line per lender (e.g. cash credit, overdraft, inventory funding). Instalments of long-term loans falling due within 12 months go in current maturities.",
+    sections: [
+      { id: "sec", title: "Secured loans", add: true, total: "", rows: [] },
+      { id: "unsec", title: "Unsecured loans", add: true, total: "", rows: [] },
+      { id: "cm", noSub: true, rows: [r("cm", "Current maturities of long-term debt")] } ],
+    total: "Total",
+    foot: "For each loan: nature of security (e.g. hypothecation of stock and book debts), rate of interest and repayment terms." },
+  { id: "n6", no: "6", title: "Deferred tax liabilities / (assets) (net)", cols: "C2", grp: "bs",
+    sections: [
+      { id: "dta", title: "Deferred tax asset", sign: -1, total: "Gross deferred tax asset (A)", add: true, rows: [
+        r("exp", "Expenses provided but allowable in income tax on payment basis"),
+        r("pdd", "Provision for doubtful debts"),
+        r("dep", "Difference between book depreciation and tax depreciation"),
+        r("oth", "Others (please specify)") ] },
+      { id: "dtl", title: "Deferred tax liability", total: "Gross deferred tax liability (B)", add: true, rows: [
+        r("dep", "Difference between book depreciation and tax depreciation"),
+        r("oth", "Others (please specify)") ] },
+      { id: "m", title: "For the deferred tax charge in the Statement of Profit and Loss", memo: true, rows: [
+        r("open", "Net deferred tax liability/(asset) at the beginning of the previous year (enter asset as negative)", { na: ["cy"] }),
+        r("chg", "Deferred tax charge/(benefit) for the year", { auto: C => ({ cy: C["n6.t.cy"] - C["n6.t.py"], py: C["n6.t.py"] - C["n6.m.open.py"] }) }) ] } ],
+    total: "Net deferred tax liability/(asset) (B − A)" },
+  { id: "n7", no: "7", title: "Other long-term liabilities", cols: "C2", grp: "bs",
+    sections: [{ id: "a", add: true, noSub: true, rows: [r("adv", "Advance from customers", { tag: "(a)" }), r("oth", "Others (please specify)", { tag: "(b)" })] }],
+    total: "Total other long-term liabilities" },
+  { id: "n8", no: "8", title: "Provisions", cols: "C4", grp: "bs",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      h("Provision for employee benefits", "(a)"),
+      r("grat", "Provision for gratuity", { indent: 1 }), r("leave", "Provision for leave encashment", { indent: 1 }),
+      h("Other provisions", "(b)"),
+      r("tax", "Provision for income tax [net of advance tax]", { indent: 1 }),
+      r("warr", "Other provisions (e.g. warranties, contingencies – please specify)", { indent: 1 }),
+      r("oth", "Others (specify nature)", { indent: 1 }) ] }],
+    total: "Total provisions" },
+  { id: "n9", no: "9", title: "Trade payables", cols: "C2", grp: "bs", parties: "creditors",
+    sections: [
+      { id: "a", noSub: true, add: true, rows: [
+        r("msme", "Total outstanding dues of micro enterprises and small enterprises", { tag: "(a)", auto: fromList("creditors", "msme") }),
+        r("oth", "Total outstanding dues of creditors other than micro enterprises and small enterprises", { tag: "(b)", auto: fromList("creditors", "oth") }) ] },
+      { id: "m", title: "Disclosure relating to suppliers registered under the MSMED Act", memo: true, rows: [
+        h("(a) Amount remaining unpaid to any supplier at the end of each accounting year"),
+        r("prin", "Principal", { indent: 1 }), r("int", "Interest", { indent: 1 }),
+        r("b", "(b) Interest paid by the buyer under section 16 of the MSMED Act, 2006, along with amounts paid beyond the appointed day"),
+        r("c", "(c) Interest due and payable for the period of delay in making payment (paid beyond the appointed day) without adding the interest specified under the Act"),
+        r("d", "(d) Interest accrued and remaining unpaid at the end of the accounting year"),
+        r("e", "(e) Further interest remaining due and payable in succeeding years, until such date when the interest dues are actually paid") ] } ],
+    total: "Total trade payables" },
+  { id: "n10", no: "10", title: "Other current liabilities", cols: "C2", grp: "bs",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      r("fl", "Current maturities of finance lease obligations", { tag: "(a)" }),
+      r("ind", "Interest accrued but not due on borrowings", { tag: "(b)" }),
+      r("id", "Interest accrued and due on borrowings", { tag: "(c)" }),
+      r("adv", "Income received in advance", { tag: "(d)" }),
+      r("unearned", "Unearned revenue", { tag: "(e)" }),
+      r("gst", "Goods and Services Tax payable", { tag: "(f)" }),
+      r("tds", "TDS payable", { tag: "(g)" }),
+      r("oth", "Other payables (specify nature)", { tag: "(h)" }) ] }],
+    total: "Total other current liabilities" },
+  { id: "n12a", no: "12", sub: "A", title: "Non-current investments", cols: "INV", grp: "bs",
+    lead: "Valued at historical cost unless stated otherwise.",
+    sections: [
+      { id: "tq", title: "Trade investments – Quoted", add: true, rows: [...INV_TRADE, ...INV_OTHER()], total: "Total quoted investments" },
+      { id: "tu", title: "Trade investments – Unquoted", add: true, rows: [...INV_TRADE, ...INV_OTHER()], total: "Total unquoted investments" },
+      { id: "m", title: "Aggregate values", memo: true, rows: [
+        r("q", "Aggregate amount of quoted investments", { na: INV_NA }), r("mv", "Market value of quoted investments", { na: INV_NA }),
+        r("uq", "Aggregate amount of unquoted investments", { na: INV_NA }), r("prov", "Aggregate provision for diminution in value of investments", { na: INV_NA }) ] } ],
+    total: "Total non-current investments",
+    foot: "Footnote 1 – Details of investment in partnership firms: name of each firm, names of partners with % share in profits, and total capital of the firm." },
+  { id: "n12b", no: "12", sub: "B", title: "Current investments", cols: "INV", grp: "bs",
+    lead: "Valued at lower of cost and market value.",
+    sections: [
+      { id: "q", title: "Quoted", add: true, rows: CUR_INV, total: "Net quoted current investments" },
+      { id: "u", title: "Unquoted", add: true, rows: CUR_INV, total: "Net unquoted current investments" },
+      { id: "m", title: "Aggregate values", memo: true, rows: [
+        r("q", "Aggregate amount of quoted investments", { na: INV_NA }), r("mv", "Market value of quoted investments", { na: INV_NA }),
+        r("uq", "Aggregate amount of unquoted investments", { na: INV_NA }), r("prov", "Aggregate provision for diminution in value of investments", { na: INV_NA }) ] } ],
+    total: "Grand total" },
+  { id: "n13", no: "13", title: "Loans and advances", cols: "C4", grp: "bs",
+    sections: [
+      { id: "sec", title: "A. Secured", add: true, rows: LOANS_ROWS, total: "Total (A)" },
+      { id: "unsec", title: "B. Unsecured", add: true, rows: LOANS_ROWS, total: "Total (B)" } ],
+    total: "Total (A + B)" },
+  { id: "n14", no: "14", title: "Other non-current assets", cols: "C2", grp: "bs",
+    sections: [{ id: "a", add: true, noSub: true, rows: [r("sd", "Security deposits", { tag: "(a)" }), r("prepaid", "Prepaid expenses", { tag: "(b)" }), r("oth", "Others (specify nature)", { tag: "(c)" })] }],
+    total: "Total other non-current assets" },
+  { id: "n15", no: "15", title: "Inventories", cols: "C2", grp: "bs",
+    lead: "Valued at lower of cost and net realisable value. Show goods in transit under the relevant sub-head.",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      r("rm", "Raw materials", { tag: "(a)" }), r("wip", "Work-in-progress", { tag: "(b)" }), r("fg", "Finished goods", { tag: "(c)" }),
+      r("sit", "Stock-in-trade", { tag: "(d)" }), r("stores", "Stores and spares", { tag: "(e)" }), r("tools", "Loose tools", { tag: "(f)" }),
+      r("oth", "Others (specify nature)", { tag: "(g)" }) ] }],
+    total: "Total inventories" },
+  { id: "n16", no: "16", title: "Trade receivables", cols: "C2", grp: "bs", parties: "debtors",
+    sections: [
+      { id: "lt6", title: "Outstanding for a period less than six months from the date they are due", rows: TR_ROWS("lt6"), total: "Sub-total" },
+      { id: "gt6", title: "Outstanding for a period exceeding six months from the date they are due", rows: [...TR_ROWS("gt6"), r("unbilled", "Unbilled receivables")], total: "Sub-total" } ],
+    total: "Total trade receivables" },
+  { id: "n17", no: "17", title: "Cash and bank balances", cols: "C2", grp: "bs",
+    sections: [
+      { id: "cce", title: "A. Cash and cash equivalents", add: true, total: "Total (I)", rows: [
+        r("cur", "Balances with banks – on current accounts", { tag: "(a)" }),
+        r("cc", "Cash credit account (debit balance)", { tag: "(b)" }),
+        r("fd3", "Fixed deposits with original maturity of less than three months", { tag: "(c)" }),
+        r("chq", "Cheques, drafts on hand", { tag: "(d)" }),
+        r("cash", "Cash on hand", { tag: "(e)" }) ] },
+      { id: "obb", title: "B. Other bank balances", add: true, total: "Total other bank balances (II)", rows: [
+        r("ear", "Earmarked bank deposits", { tag: "(i)" }),
+        r("fd12", "Deposits with original maturity of more than 3 months but less than 12 months", { tag: "(ii)" }),
+        r("margin", "Margin money or deposits under lien", { tag: "(iii)" }),
+        r("oth", "Others (specify nature)", { tag: "(iv)" }) ] } ],
+    total: "Total cash and bank balances (I + II)" },
+  { id: "n18", no: "18", title: "Other current assets", cols: "C2", grp: "bs",
+    lead: "All-inclusive heading for current assets that do not fit under any other asset category.",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      r("ind", "Interest accrued but not due on deposits", { tag: "(a)" }), r("id", "Interest accrued and due on deposits", { tag: "(b)" }) ] }],
+    total: "Total other current assets" },
+  { id: "n19", no: "19", title: "Revenue from operations", cols: "C2", grp: "pl",
+    sections: [
+      { id: "g", add: true, total: "Revenue from operations (gross)", rows: [
+        r("prod", "Sale of products", { tag: "(a)" }), r("serv", "Sale of services", { tag: "(b)" }),
+        r("grant", "Grants or donations received", { tag: "(c)" }), r("oor", "Other operating revenue", { tag: "(d)" }) ] },
+      { id: "l", noSub: true, rows: [r("excise", "Less: Excise duty", { sign: -1 })] } ],
+    total: "Revenue from operations (net)" },
+  { id: "n20", no: "20", title: "Other income", cols: "C2", grp: "pl",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      r("int", "Interest income", { tag: "(a)" }), r("div", "Dividend income", { tag: "(b)" }),
+      r("gain", "Net gain on sale of investments", { tag: "(c)" }), r("oth", "Other non-operating income (please specify)", { tag: "(d)" }) ] }],
+    total: "Total other income" },
+  { id: "n21", no: "21", title: "Cost of goods sold", cols: "C2", grp: "pl",
+    lead: "Leave unused parts blank. Enter closing inventory as a positive figure; it is deducted automatically.",
+    sections: [
+      ...[["rm", "A (I). Raw material consumed", "Cost of raw material consumed (I)"],
+        ["pm", "A (II). Packing material consumed (if considered part of raw material)", "Cost of packing material consumed (II)"],
+        ["om", "A (III). Other materials (purchased intermediates and components)", "Cost of other materials consumed (III)"]].map(([id, title, total]) => ({ id, title, total, rows: [
+          r("open", "Inventory at the beginning of the year", { tag: "(i)" }),
+          r("purch", "Add: Purchases during the year", { tag: "(ii)" }),
+          r("close", "Less: Inventory at the end of the year", { tag: "(iii)", sign: -1 }) ] })),
+      { id: "sit", title: "B. Purchases of stock-in-trade", add: true, total: "Total (B)", rows: [r("p1", "Purchases of stock-in-trade", { tag: "(i)" })] },
+      { id: "chg", title: "C. Changes in inventories of finished goods, work-in-progress and stock-in-trade", total: "(Increase)/decrease in inventories (C)", rows: [
+        h("Inventories at the beginning of the year"),
+        r("o_sit", "Stock-in-trade", { indent: 1 }), r("o_wip", "Work-in-progress", { indent: 1 }), r("o_fg", "Finished goods", { indent: 1 }),
+        h("Less: Inventories at the end of the year"),
+        r("c_sit", "Stock-in-trade", { indent: 1, sign: -1 }), r("c_wip", "Work-in-progress", { indent: 1, sign: -1 }), r("c_fg", "Finished goods", { indent: 1, sign: -1 }) ] } ],
+    total: "Total cost of goods sold (A + B + C)" },
+  { id: "n22", no: "22", title: "Employee benefits expense", cols: "C2", grp: "pl", lead: "Including contract labour.",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      r("sal", "Salaries, wages, bonus and other allowances", { tag: "(a)" }), r("pf", "Contribution to provident and other funds", { tag: "(b)" }),
+      r("grat", "Gratuity expenses", { tag: "(c)" }), r("welfare", "Staff welfare expenses", { tag: "(d)" }) ] }],
+    total: "Total employee benefits expense" },
+  { id: "n23", no: "23", title: "Finance costs", cols: "C2", grp: "pl",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      h("Interest expense (other than interest on partners' / members' capital)", "(a)"),
+      r("bank", "On bank loans", { indent: 1 }), r("fl", "On assets on finance lease", { indent: 1 }), r("oth", "On other loans", { indent: 1 }),
+      r("pint", "Interest on partners' / members' capital", { tag: "(b)", auto: C => ({ cy: C["p.int.cy"], py: C["p.int.py"] }), src: "n3" }),
+      r("obc", "Other borrowing costs", { tag: "(c)" }),
+      r("fx", "Loss on foreign exchange transactions and translations considered as finance cost (net)", { tag: "(d)" }) ] }],
+    total: "Total finance costs" },
+  { id: "n24", no: "24", title: "Depreciation and amortisation expense", cols: "C2", grp: "pl",
+    lead: "Filled automatically from the depreciation provided in the fixed assets schedule.",
+    sections: [{ id: "a", noSub: true, rows: [
+      r("tang", "On property, plant and equipment", { tag: "(a)", auto: C => ({ cy: C["ppe.tangible.dep_cy"], py: C["ppe.tangible.dep_py"] }), src: "n11" }),
+      r("intang", "On intangible assets", { tag: "(b)", auto: C => ({ cy: C["ppe.intangible.dep_cy"], py: C["ppe.intangible.dep_py"] }), src: "n11" }) ] }],
+    total: "Total depreciation and amortisation expense" },
+  { id: "n25", no: "25", title: "Other expenses", cols: "C2", grp: "pl",
+    sections: [{ id: "a", add: true, noSub: true, rows: [
+      ["stores", "Consumption of stores and spare parts"], ["power", "Power and fuel"], ["rent", "Rent"],
+      ["rm_b", "Repairs and maintenance – buildings"], ["rm_m", "Repairs and maintenance – machinery"], ["ins", "Insurance"],
+      ["rates", "Rates and taxes, excluding taxes on income"], ["labour", "Labour charges"], ["travel", "Travelling expenses"],
+      ["audit", "Auditor's remuneration"], ["print", "Printing and stationery"], ["comm", "Communication expenses"],
+      ["legal", "Legal and professional charges"], ["adv", "Advertisement and publicity"], ["promo", "Business promotion expenses"],
+      ["commission", "Commission"], ["cnf", "Clearing and forwarding charges"], ["lossppe", "Loss on sale of property, plant and equipment"],
+      ["fx", "Loss on foreign exchange transactions (net)"], ["fwd", "Loss on cancellation of forward contracts"], ["lossinv", "Loss on sale of investments (net)"],
+      ["dimin", "Provision for diminution in value of investments"], ["pdd", "Provision for doubtful debts"], ["misc", "Miscellaneous expenses"]
+    ].map(([k, l], i) => r(k, l, { tag: "(" + "abcdefghijklmnopqrstuvwx"[i] + ")" })) }],
+    total: "Total other expenses" },
+  { id: "tx", no: "", title: "Tax and other P&L items", cols: "C2", grp: "pl", noTotal: true,
+    lead: "These lines appear on the face of the Statement of Profit and Loss without a separate note. Enter expenses as positive figures and gains as negative.",
+    sections: [
+      { id: "exc", title: "VI. Exceptional items", add: true, total: "Total exceptional items", rows: [r("a", "Exceptional items (specify nature)")] },
+      { id: "ext", title: "VIII. Extraordinary items", add: true, total: "Total extraordinary items", rows: [r("a", "Extraordinary items (specify nature)")] },
+      { id: "tax", title: "XII. Tax expense", total: "Total tax expense", rows: [
+        r("cur", "Current tax", { tag: "(a)" }),
+        r("ey", "Excess / short provision of tax relating to earlier years", { tag: "(b)" }),
+        r("def", "Deferred tax charge/(benefit)", { tag: "(c)", auto: C => ({ cy: C["n6.m.chg.cy"], py: C["n6.m.chg.py"] }), src: "n6" }) ] },
+      { id: "disc", title: "Discontinuing operations", noSub: true, rows: [
+        r("profit", "XIV. Profit/(loss) from discontinuing operations (enter loss as negative)"),
+        r("tax", "XV. Tax expense of discontinuing operations") ] } ] },
+];
+const NOTE_BY = Object.fromEntries(NOTES.map(n => [n.id, n]));
+const NOTE_ORDER = ["n3", "n4", "n5a", "n6", "n7", "n8", "n5b", "n9", "n10", "n11", "n12a", "n13", "n14", "n12b", "n15", "n16", "n17", "n18",
+  "n19", "n20", "n21", "n22", "n23", "n24", "n25"];
+const NOTE_NO = Object.fromEntries(NOTE_ORDER.map((id, i) => [id, String(i + 3)]));
+const NN = id => NOTE_NO[id] || "";
+const TITLE_OF = { n3: "Owners' capital account", n11: "Fixed assets" };
+
+function colsFor(S, set) {
+  const d = dates(S);
+  if (set === "C4") return [
+    { k: "lt_cy", g: "Long term", label: d.cy }, { k: "lt_py", g: "Long term", label: d.py },
+    { k: "st_cy", g: "Short term", label: d.cy }, { k: "st_py", g: "Short term", label: d.py }];
+  if (set === "INV") return [
+    { k: "fv", label: "Face value", text: true },
+    { k: "n_cy", g: "As at " + d.cy, label: "Nos. / units", text: true }, { k: "cy", g: "As at " + d.cy, label: "Book value" },
+    { k: "n_py", g: "As at " + d.py, label: "Nos. / units", text: true }, { k: "py", g: "As at " + d.py, label: "Book value" }];
+  return [{ k: "cy", label: d.cy }, { k: "py", label: d.py }];
+}
+const AMT_COLS = { C2: ["cy", "py"], C4: ["lt_cy", "lt_py", "st_cy", "st_py"], INV: ["cy", "py"] };
+
+// fixed asset blocks with the usual Income-tax WDV rates; "i" marks intangible blocks
+const FA_DEFAULT = [["Land & Building", "t", 10], ["Furniture & Fixtures", "t", 10], ["Plant & Machinery", "t", 15], ["Office Equipment", "t", 15],
+  ["Motor Car", "t", 15], ["Computer & Printer", "t", 40], ["Computer Software", "i", 40]];
+const FA_F = ["open", "add1", "add2", "sale"];
+
+const POLICIES = `2.1 Basis of preparation
+The financial statements have been prepared under the historical cost convention on the accrual basis of accounting, in accordance with the generally accepted accounting principles in India and the Accounting Standards issued by the Institute of Chartered Accountants of India, as applicable to the entity.
+
+2.2 Use of estimates
+The preparation of financial statements requires management to make estimates and assumptions that affect the reported amounts of assets, liabilities, income and expenses. Differences between actual results and estimates are recognised in the period in which they are known.
+
+2.3 Property, plant and equipment and depreciation
+Property, plant and equipment are stated at cost less accumulated depreciation and impairment, if any. Depreciation is provided on the written down value method at the rates prescribed under the Income-tax Act, 1961 / based on the useful lives estimated by management.
+
+2.4 Inventories
+Inventories are valued at the lower of cost (on FIFO / weighted average basis) and net realisable value.
+
+2.5 Revenue recognition
+Revenue from sale of goods is recognised when significant risks and rewards of ownership are transferred to the buyer. Revenue from services is recognised as the services are rendered. Revenue is shown net of GST.
+
+2.6 Investments
+Long-term investments are carried at cost less provision for diminution, other than temporary, in value. Current investments are carried at the lower of cost and fair value.
+
+2.7 Employee benefits
+Contributions to defined contribution schemes are charged to the Statement of Profit and Loss. Gratuity and leave encashment are provided on the basis of actuarial valuation / as per management estimate.
+
+2.8 Taxes on income
+Current tax is determined as the amount of tax payable for the year. Deferred tax is recognised on timing differences between taxable and accounting income, subject to consideration of prudence.
+
+2.9 Provisions and contingent liabilities
+Provisions are recognised when there is a present obligation as a result of past events and it is probable that an outflow of resources will be required. Contingent liabilities are disclosed in the notes.`;
+
+/* ---------------- state ---------------- */
+function blankState(name) {
+  const cls = (list) => list.map(n => ({ id: uid(), name: n }));
+  return {
+    v: 1, id: uid(), updatedAt: Date.now(),
+    info: { name: name || "New entity", type: "Partnership firm", fyEnd: "2026-03-31", unit: "Rs.", dec: 0, ownerWord: "Partner",
+      place: "", date: "", caFirm: "", frn: "", caName: "", mno: "", about: "", policies: POLICIES },
+    allocate: true,
+    partners: [{ id: uid(), name: "", share: 50, pshare: 50, cy: {}, py: {} }, { id: uid(), name: "", share: 50, pshare: 50, cy: {}, py: {} }],
+    vals: {}, extra: {}, text: {}, parties: { debtors: [], creditors: [] },
+    fa: { assets: FA_DEFAULT.map(([name, kind, rate]) => ({ id: uid(), name, kind, rate })), py: {} },
+    cwip: {}, iaud: {},
+  };
+}
+let S = null;            // current entity
+let ENT = {};            // id -> state
+let C = {};              // computed values
+let route = "info";
+let p3Year = "cy";
+let deleteArmed = false;
+
+function getV(n, rk, c) { return S.vals[n]?.[rk]?.[c]; }
+function setV(n, rk, c, val) { ((S.vals[n] ||= {})[rk] ||= {})[c] = val; }
+
+/* ---------------- compute ---------------- */
+function rowsOf(note, sec) {
+  const ex = (S.extra[note.id + "." + sec.id] || []).map(e => ({ k: "x_" + e.id, label: e.label, extra: e }));
+  return [...sec.rows, ...ex];
+}
+function computeNote(note) {
+  const amt = AMT_COLS[note.cols];
+  const tot = Object.fromEntries(amt.map(c => [c, 0]));
+  for (const sec of note.sections) {
+    const st = Object.fromEntries(amt.map(c => [c, 0]));
+    for (const row of rowsOf(note, sec)) {
+      if (row.h) continue;
+      const av = row.auto ? row.auto(C) : null;
+      row.live = !!av;
+      for (const c of amt) {
+        const val = av ? num(av[c]) : (row.na?.includes(c) ? 0 : num(getV(note.id, sec.id + "." + row.k, c)));
+        C[`${note.id}.${sec.id}.${row.k}.${c}`] = val;
+        st[c] += (row.sign || 1) * val;
+      }
+    }
+    for (const c of amt) {
+      C[`${note.id}.s.${sec.id}.${c}`] = st[c];
+      if (!sec.memo) tot[c] += (sec.sign || 1) * st[c];
+      C[`${note.id}.t.${c}`] = tot[c];
+    }
+  }
+}
+const rnd = x => { const f = Math.pow(10, DEC); return Math.round(x * f) / f; };
+function computePPE() {
+  const T = { open: 0, add1: 0, add2: 0, add: 0, sale: 0, close: 0, dep: 0, wdv: 0 };
+  const K = { t: { dep: 0, wdv: 0, open: 0 }, i: { dep: 0, wdv: 0, open: 0 } };
+  for (const a of S.fa.assets) {
+    const v = f => num(a[f]), rate = num(a.rate);
+    const o = { open: v("open"), add1: v("add1"), add2: v("add2"), sale: v("sale") };
+    o.add = o.add1 + o.add2;
+    o.close = o.open + o.add - o.sale;
+    // full rate on opening and additions used 180 days or more (less sales); half rate on later additions
+    o.dep = rnd(Math.max(o.open + o.add1 - o.sale, 0) * rate / 100 + o.add2 * rate / 200);
+    o.wdv = o.close - o.dep;
+    for (const k in o) { C[`fa.${a.id}.${k}`] = o[k]; T[k] += o[k]; }
+    const k = K[a.kind === "i" ? "i" : "t"]; k.dep += o.dep; k.wdv += o.wdv; k.open += o.open;
+  }
+  for (const k in T) C[`fa.T.${k}`] = T[k];
+  const p = S.fa.py || {}, pv = f => num(p[f]);
+  C["fa.py.open"] = pv("open"); C["fa.py.add"] = pv("add"); C["fa.py.sale"] = pv("sale"); C["fa.py.dep"] = pv("dep");
+  C["fa.py.close"] = pv("open") + pv("add") - pv("sale"); C["fa.py.wdv"] = C["fa.py.close"] - pv("dep");
+  // the previous year's W.D.V. of each block is this year's opening balance
+  C["ppe.tangible.dep_cy"] = K.t.dep; C["ppe.intangible.dep_cy"] = K.i.dep;
+  C["ppe.tangible.net_cy"] = K.t.wdv; C["ppe.intangible.net_cy"] = K.i.wdv;
+  C["ppe.tangible.net_py"] = K.t.open; C["ppe.intangible.net_py"] = K.i.open;
+  C["ppe.tangible.dep_py"] = pv("dep"); C["ppe.intangible.dep_py"] = 0;
+  for (const w of ["cwip", "iaud"]) {
+    const v = f => num(S[w][f]);
+    const py = v("open") + v("add_py") - v("cap_py");
+    C[`${w}.open_py`] = v("open"); C[`${w}.close_py`] = py; C[`${w}.open_cy`] = py;
+    C[`${w}.close_cy`] = py + v("add_cy") - v("cap_cy");
+  }
+}
+function compute() {
+  C = {};
+  DEC = num(S.info.dec);
+  computePPE();
+  for (const y of ["cy", "py"]) {
+    for (const k of ["debtors", "creditors"]) C[`${k}.T.${y}`] = 0;
+    for (const a of ["lt6", "gt6"]) for (const st of ["sec", "unsec", "doubt"]) C[`debtors.${a}.${st}.${y}`] = 0;
+    C[`creditors.msme.${y}`] = 0; C[`creditors.oth.${y}`] = 0;
+    for (const p of S.parties.debtors) { const v = num(p[y]); C[`debtors.${p.age || "lt6"}.${p.st || "unsec"}.${y}`] += v; C[`debtors.T.${y}`] += v; }
+    for (const p of S.parties.creditors) { const v = num(p[y]); C[`creditors.${p.msme === "yes" ? "msme" : "oth"}.${y}`] += v; C[`creditors.T.${y}`] += v; }
+  }
+  for (const y of ["cy", "py"]) {
+    C[`p.rem.${y}`] = S.partners.reduce((a, p) => a + num(p[y].rem), 0);
+    C[`p.int.${y}`] = S.partners.reduce((a, p) => a + num(p[y].int), 0);
+  }
+  ["n6", "n19", "n20", "n21", "n22", "n23", "n24", "n25", "tx"].forEach(id => computeNote(NOTE_BY[id]));
+  for (const y of ["cy", "py"]) {
+    const g = k => C[k + "." + y] || 0;
+    const P = {};
+    P.rev = g("n19.t"); P.oi = g("n20.t"); P.ti = P.rev + P.oi;
+    P.cogs = g("n21.t"); P.emp = g("n22.t"); P.fin = g("n23.t"); P.dep = g("n24.t"); P.oth = g("n25.t");
+    P.exp = P.cogs + P.emp + P.fin + P.dep + P.oth;
+    P.v = P.ti - P.exp;
+    P.exc = g("tx.s.exc"); P.vii = P.v - P.exc;
+    P.ext = g("tx.s.ext"); P.ix = P.vii - P.ext;
+    P.rem = g("p.rem"); P.pbt = P.ix - P.rem;
+    P.cur = g("tx.tax.cur"); P.ey = g("tx.tax.ey"); P.def = g("tx.tax.def"); P.tax = P.cur + P.ey + P.def;
+    P.cont = P.pbt - P.tax;
+    P.dp = g("tx.disc.profit"); P.dt = g("tx.disc.tax"); P.disc = P.dp - P.dt;
+    P.profit = P.cont + P.disc;
+    for (const k in P) C[`pl.${k}.${y}`] = P[k];
+    C[`pl.alloc_off.${y}`] = S.allocate ? 0 : P.profit;
+    // owners' capital
+    let close = 0, shareT = 0;
+    S.partners.forEach(p => {
+      const sh = y === "cy" ? num(p.share) : num(p.pshare ?? p.share);
+      shareT += sh;
+      const v = f => num(p[y][f]);
+      const prof = S.allocate ? P.profit * sh / 100 : 0;
+      const cl = v("open") + v("intro") + v("rem") + v("int") - v("wd") + prof;
+      C[`p.${p.id}.share.${y}`] = prof; C[`p.${p.id}.close.${y}`] = cl;
+      close += cl;
+      for (const f of ["open", "intro", "rem", "int", "wd"]) C[`p.T.${f}.${y}`] = (C[`p.T.${f}.${y}`] || 0) + v(f);
+    });
+    C[`p.T.share.${y}`] = S.allocate ? S.partners.reduce((a, p) => a + C[`p.${p.id}.share.${y}`], 0) : 0;
+    C[`p.T.close.${y}`] = close; C[`p.shareT.${y}`] = shareT;
+  }
+  NOTES.filter(n => !["n6", "n19", "n20", "n21", "n22", "n23", "n24", "n25", "tx"].includes(n.id)).forEach(computeNote);
+  for (const y of ["cy", "py"]) {
+    const g = k => C[k] || 0;
+    const B = {};
+    B.cap = g(`p.T.close.${y}`); B.res = g(`n4.t.${y}`); B.of = B.cap + B.res;
+    const dt = g(`n6.t.${y}`);
+    B.ltb = g(`n5a.t.${y}`); B.dtl = Math.max(dt, 0); B.oltl = g(`n7.t.${y}`); B.ltp = g(`n8.t.lt_${y}`);
+    B.ncl = B.ltb + B.dtl + B.oltl + B.ltp;
+    B.stb = g(`n5b.t.${y}`); B.tp = g(`n9.t.${y}`); B.ocl = g(`n10.t.${y}`); B.stp = g(`n8.t.st_${y}`);
+    B.cl = B.stb + B.tp + B.ocl + B.stp;
+    B.el = B.of + B.ncl + B.cl;
+    B.ppe = g(`ppe.tangible.net_${y}`); B.intang = g(`ppe.intangible.net_${y}`); B.cwip = g(`cwip.close_${y}`); B.iaud = g(`iaud.close_${y}`);
+    B.nci = g(`n12a.t.${y}`); B.dta = Math.max(-dt, 0); B.ltla = g(`n13.t.lt_${y}`); B.onca = g(`n14.t.${y}`);
+    B.nca = B.ppe + B.intang + B.cwip + B.iaud + B.nci + B.dta + B.ltla + B.onca;
+    B.ci = g(`n12b.t.${y}`); B.inv = g(`n15.t.${y}`); B.tr = g(`n16.t.${y}`); B.cash = g(`n17.t.${y}`); B.stla = g(`n13.t.st_${y}`); B.oca = g(`n18.t.${y}`);
+    B.ca = B.ci + B.inv + B.tr + B.cash + B.stla + B.oca;
+    B.as = B.nca + B.ca;
+    B.diff = B.el - B.as;
+    for (const k in B) C[`bs.${k}.${y}`] = B[k];
+  }
+}
+
+/* ---------------- checks ---------------- */
+function checks() {
+  const out = [], d = dates(S), e = 0.5 / Math.pow(10, DEC);
+  for (const y of ["cy", "py"]) {
+    const df = C[`bs.diff.${y}`];
+    out.push(Math.abs(df) < e
+      ? { s: "ok", t: `Balance Sheet as at ${d[y]} tallies.` }
+      : { s: "bad", t: `Balance Sheet as at ${d[y]} does not tally. Equity and liabilities exceed assets by ${fmt(df)}. Check the notes for missing or misplaced figures.`, go: "bs" });
+  }
+  if (S.allocate && S.partners.length) for (const y of ["cy", "py"]) {
+    const t = C[`p.shareT.${y}`];
+    if (Math.abs(t - 100) > 0.001) out.push({ s: "bad", t: `Profit-sharing ratios for ${y === "cy" ? "the current year" : "the previous year"} add up to ${t}%, not 100%. Part of the profit is not credited to any owner.`, go: "n3" });
+  }
+  S.partners.forEach(p => {
+    const pyc = C[`p.${p.id}.close.py`], cyo = num(p.cy.open);
+    if (Math.abs(pyc - cyo) >= e && (Math.abs(pyc) >= e || Math.abs(cyo) >= e))
+      out.push({ s: "warn", t: `${p.name || "Unnamed owner"}: opening capital this year (${fmt(cyo)}) differs from last year's closing capital (${fmt(pyc)}).`, go: "n3" });
+  });
+  const clos = y => ["rm", "pm", "om"].reduce((a, s) => a + (C[`n21.${s}.close.${y}`] || 0), 0) + ["c_sit", "c_wip", "c_fg"].reduce((a, k) => a + (C[`n21.chg.${k}.${y}`] || 0), 0);
+  for (const y of ["cy", "py"]) {
+    const a = C[`n15.t.${y}`], b = clos(y);
+    if (Math.abs(a - b) >= e && b !== 0) out.push({ s: "warn", t: `Closing stock used in Cost of goods sold (${fmt(b)}) differs from Inventories in Note ${NN("n15")} (${fmt(a)}) as at ${d[y]}. Differences can be valid (stores, loose tools).`, go: "n15" });
+  }
+  const opn = ["rm", "pm", "om"].reduce((a, s) => a + (C[`n21.${s}.open.cy`] || 0), 0) + ["o_sit", "o_wip", "o_fg"].reduce((a, k) => a + (C[`n21.chg.${k}.cy`] || 0), 0);
+  const pyc = clos("py");
+  if (pyc !== 0 && Math.abs(opn - pyc) >= e) out.push({ s: "warn", t: `Opening stock this year (${fmt(opn)}) differs from closing stock last year (${fmt(pyc)}) in Note ${NN("n21")}.`, go: "n21" });
+  if (C["bs.dtl.cy"] > 0 && C["bs.dta.cy"] > 0) out.push({ s: "warn", t: "Deferred tax shows both an asset and a liability." });
+  if ((Math.abs(C["fa.py.wdv"]) >= e || Math.abs(C["fa.T.open"]) >= e) && Math.abs(C["fa.py.wdv"] - C["fa.T.open"]) >= e)
+    out.push({ s: "warn", t: `Previous-year W.D.V. in the fixed asset schedule (${fmt(C["fa.py.wdv"])}) differs from this year's opening balance (${fmt(C["fa.T.open"])}).`, go: "n11" });
+  const norate = S.fa.assets.filter(a => !num(a.rate) && FA_F.some(f => num(a[f])));
+  if (norate.length) out.push({ s: "warn", t: `No depreciation rate entered for ${norate.map(a => a.name || "an unnamed asset").join(", ")}.`, go: "n11" });
+  return out;
+}
+
+/* ---------------- navigation ---------------- */
+const NAV = [
+  ["Setup", [["info", "", "Entity details"], ["n1", "1–2", "About the entity and policies"]]],
+  ["Statements (automatic)", [["bs", "", "Balance Sheet"], ["pl", "", "Profit and Loss"], ["checks", "", "Checks"]]],
+  ["Notes – Balance Sheet", NOTE_ORDER.filter(id => NOTE_BY[id]?.grp !== "pl").map(id => [id, NN(id), TITLE_OF[id] || NOTE_BY[id].title])],
+  ["Notes – Profit and Loss", [...NOTE_ORDER.filter(id => NOTE_BY[id]?.grp === "pl").map(id => [id, NN(id), NOTE_BY[id].title]), ["tx", "", NOTE_BY.tx.title]]],
+];
+function renderNav() {
+  $("#sideNav").innerHTML = NAV.map(([g, items]) => `<h4>${esc(g)}</h4>` + items.map(([id, no, t]) =>
+    `<a href="#${id}" class="${route === id ? "on" : ""}"><span class="no">${esc(no)}</span><span>${esc(t)}</span></a>`).join("")).join("");
+  $("#mobNav").innerHTML = NAV.map(([g, items]) => `<optgroup label="${esc(g)}">` + items.map(([id, no, t]) =>
+    `<option value="${id}" ${route === id ? "selected" : ""}>${no ? esc(no) + " · " : ""}${esc(t)}</option>`).join("") + "</optgroup>").join("");
+}
+function go(id) { location.hash = id; }
+window.addEventListener("hashchange", () => { route = location.hash.slice(1) || "info"; deleteArmed = false; render(); window.scrollTo(0, 0); });
+$("#mobNav").addEventListener("change", e => go(e.target.value));
+
+/* ---------------- render: generic note ---------------- */
+function cellsFor(note, sec, row, cols) {
+  if (row.h) return cols.map(() => '<td class="num"></td>').join("");
+  return cols.map(c => {
+    const amt = !c.text;
+    if (row.na?.includes(c.k)) return `<td class="num na">NA</td>`;
+    if (row.auto && row.live) return amt ? `<td class="num calc" data-calc="${note.id}.${sec.id}.${row.k}.${c.k}"></td>` : '<td class="num"></td>';
+    const v = getV(note.id, sec.id + "." + row.k, c.k);
+    if (!amt) return `<td><input class="amt t" data-n="${note.id}" data-r="${sec.id}.${row.k}" data-c="${c.k}" data-text="1" value="${esc(v ?? "")}" aria-label="${esc(row.label)} ${esc(c.label)}"></td>`;
+    return `<td class="num"><input class="amt" inputmode="decimal" data-n="${note.id}" data-r="${sec.id}.${row.k}" data-c="${c.k}" value="${esc(fmtIn(v))}" aria-label="${esc(row.label)} ${esc(c.g || "")} ${esc(c.label)}"></td>`;
+  }).join("");
+}
+function totalCells(prefix, cols) {
+  return cols.map(c => c.text ? '<td class="num"></td>' : `<td class="num calc" data-calc="${prefix}.${c.k}"></td>`).join("");
+}
+function noteTable(note) {
+  const cols = colsFor(S, note.cols);
+  const groups = cols.some(c => c.g);
+  let head = "";
+  if (groups) {
+    const gs = []; cols.forEach(c => { const l = gs[gs.length - 1]; if (l && l.g === (c.g || "")) l.n++; else gs.push({ g: c.g || "", n: 1 }); });
+    head += `<tr class="grp"><th></th><th></th>${gs.map(g => `<th colspan="${g.n}">${esc(g.g)}</th>`).join("")}</tr>`;
+  }
+  head += `<tr><th></th><th>Particulars</th>${cols.map(c => `<th class="num">${esc(c.label)}</th>`).join("")}</tr>`;
+  let body = "";
+  for (const sec of note.sections) {
+    if (sec.title) body += `<tr class="sec"><td class="tag"></td><td>${esc(sec.title)}${sec.memo ? " <span class=\"status\">(for disclosure, not added to the total)</span>" : ""}</td>${cols.map(() => '<td class="num"></td>').join("")}</tr>`;
+    for (const row of rowsOf(note, sec)) {
+      const cls = [row.h ? "hd" : "", row.indent ? "indent" : "", sec.memo ? "memo" : ""].join(" ");
+      let lbl = row.extra
+        ? `<div style="display:flex;gap:4px;align-items:center"><input class="lbl-in" data-xl="${note.id}.${sec.id}" data-xid="${row.extra.id}" value="${esc(row.label)}" placeholder="Describe this line" aria-label="Line description"><button class="rowx" title="Remove line" aria-label="Remove line" data-xdel="${note.id}.${sec.id}" data-xid="${row.extra.id}">×</button></div>`
+        : esc(row.h || row.label) + (row.auto && row.live ? `<span class="auto">${row.src ? "auto" : "from list"}</span>${row.src ? ` <button class="link" data-go="${row.src}">from Note ${NN(row.src)}</button>` : ""}` : "");
+      body += `<tr class="${cls}"><td class="tag">${esc(row.tag || "")}</td><td class="lbl">${lbl}</td>${cellsFor(note, sec, row, cols)}</tr>`;
+    }
+    if (sec.add) body += `<tr class="addrow"><td class="tag"></td><td><button class="btn small" data-add="${note.id}.${sec.id}">+ Add line</button></td>${cols.map(() => '<td class="num"></td>').join("")}</tr>`;
+    if (!sec.noSub && !sec.memo && sec.total !== false) body += `<tr class="sub"><td class="tag"></td><td>${esc(sec.total ?? "Total")}</td>${totalCells(`${note.id}.s.${sec.id}`, cols)}</tr>`;
+  }
+  if (!note.noTotal) body += `<tr class="tot"><td class="tag"></td><td>${esc(note.total || "Total")}</td>${totalCells(`${note.id}.t`, cols)}</tr>`;
+  return `<div class="sheet scroll"><table class="grid"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+function footBox(key, placeholder, label) {
+  label ||= "Footnotes and disclosures";
+  return `<div class="sheet foot"><label for="ft_${key}">${esc(label)}</label><textarea id="ft_${key}" data-txt="${key}" placeholder="${esc(placeholder)}">${esc(S.text[key] || "")}</textarea></div>`;
+}
+function bsLineFor(id) {
+  const m = { n4: "Reserves and surplus", n5a: "Long-term borrowings", n5b: "Short-term borrowings", n6: "Deferred tax liability / asset (net)", n7: "Other long-term liabilities", n8: "Long-term and short-term provisions",
+    n9: "Trade payables", n10: "Other current liabilities", n12a: "Non-current investments", n12b: "Current investments", n13: "Long-term and short-term loans and advances",
+    n14: "Other non-current assets", n15: "Inventories", n16: "Trade receivables", n17: "Cash and bank balances", n18: "Other current assets",
+    n19: "Revenue from operations", n20: "Other income", n21: "Cost of goods sold", n22: "Employee benefits expense", n23: "Finance costs", n24: "Depreciation and amortisation expense", n25: "Other expenses" };
+  return m[id];
+}
+function pageNote(note) {
+  const where = note.grp === "bs" ? "bs" : "pl";
+  const line = bsLineFor(note.id);
+  return `<div class="page-head"><h1>${NN(note.id) ? `<span class="nno">Note ${NN(note.id)}</span>` : ""}${esc(note.title)}</h1>
+    <span class="status">Amount in ${esc(S.info.unit)}</span></div>
+    ${note.lead || note.hint || line ? `<p class="lead">${esc(note.lead || note.hint || "")} ${line ? `The total flows to <button class="link" data-go="${where}">${esc(line)}</button> in the ${where === "bs" ? "Balance Sheet" : "Statement of Profit and Loss"}.` : ""}</p>` : ""}
+    ${note.parties ? partyTable(note.parties) : ""}
+    ${note.parties ? `<h2 style="font-family:var(--font-doc);font-size:18px;margin:6px 0 0">Note as it will print</h2>` : ""}
+    ${noteTable(note)}
+    ${footBox(note.id, note.foot || "Add any explanation, nature of items marked ‘specify’, or other disclosure for this note.", note.footLabel)}`;
+}
+
+/* ---------------- render: party-wise debtors and creditors ---------------- */
+const PARTY = {
+  debtors: { note: "n16", title: "Party-wise trade receivables", sheet: "Debtors", noun: "debtor" },
+  creditors: { note: "n9", title: "Party-wise trade payables", sheet: "Creditors", noun: "creditor" },
+};
+const AGE = [["lt6", "Less than 6 months"], ["gt6", "More than 6 months"]];
+const DST = [["unsec", "Unsecured, considered good"], ["sec", "Secured, considered good"], ["doubt", "Doubtful"]];
+function partyTable(kind) {
+  const d = dates(S), list = S.parties[kind], deb = kind === "debtors";
+  const sel = (p, f, opts) => `<select data-pt="${kind}" data-pid="${p.id}" data-pf="${f}" aria-label="${f}">${opts.map(([v, l]) => `<option value="${v}" ${String(p[f]) === v ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+  const amt = (p, f) => `<td class="num"><input class="amt" inputmode="decimal" data-pt="${kind}" data-pid="${p.id}" data-pf="${f}" value="${esc(fmtIn(p[f]))}" aria-label="${f}"></td>`;
+  const head = `<tr><th>Sr.</th><th>Name of party</th><th>Group</th>${deb ? "<th>Outstanding for</th><th>Classification</th>" : "<th>MSME</th>"}<th class="num">${esc(d.cy)}</th><th class="num">${esc(d.py)}</th><th></th></tr>`;
+  const rows = list.map((p, i) => `<tr><td class="tag">${i + 1}</td>
+    <td class="lbl"><input class="lbl-in" data-pt="${kind}" data-pid="${p.id}" data-pf="name" value="${esc(p.name)}" placeholder="Name of party" aria-label="Name of party"></td>
+    <td><input class="lbl-in" style="min-width:120px" data-pt="${kind}" data-pid="${p.id}" data-pf="grp" value="${esc(p.grp)}" placeholder="e.g. Vehicle debtors" aria-label="Group"></td>
+    ${deb ? `<td>${sel(p, "age", AGE)}</td><td>${sel(p, "st", DST)}</td>` : `<td>${sel(p, "msme", [["no", "No"], ["yes", "Yes"]])}</td>`}
+    ${amt(p, "cy")}${amt(p, "py")}<td><button class="rowx" data-ptdel="${kind}" data-pid="${p.id}" aria-label="Remove party">×</button></td></tr>`).join("");
+  const span = deb ? 4 : 3;
+  return `<h2 style="font-family:var(--font-doc);font-size:18px;margin:6px 0 0">${PARTY[kind].title}</h2>
+  <p class="lead">${list.length ? `The note below totals itself from this list${deb ? " by period and classification" : " (MSME and others)"}.` : `Add each ${PARTY[kind].noun} here, or paste the list from Excel or Tally. While the list is empty you can type totals straight into the note below.`}</p>
+  <div class="sheet scroll"><table class="grid party"><thead>${head}</thead><tbody>${rows}
+    <tr class="addrow"><td class="tag"></td><td colspan="${span}"><button class="btn small" data-padd="${kind}">+ Add party</button></td><td class="num"></td><td class="num"></td><td></td></tr>
+    <tr class="tot"><td class="tag"></td><td colspan="${span}">Total</td><td class="num calc" data-calc="${kind}.T.cy"></td><td class="num calc" data-calc="${kind}.T.py"></td><td></td></tr>
+  </tbody></table></div>
+  <details class="sheet foot"><summary><b>Paste a list from Excel or Tally</b></summary>
+    <p class="status" style="margin:6px 0">Copy the cells and paste below, one party per line, columns in this order: Party name, Amount ${esc(d.cy)}, Group, Amount ${esc(d.py)}. Only the first two are needed. Header and total lines are skipped.</p>
+    <textarea id="paste_${kind}" placeholder="ABC Traders&#9;125000&#9;Retail dealers&#9;98000"></textarea>
+    <div><button class="btn small primary" data-paste="${kind}">Add pasted rows</button></div>
+  </details>`;
+}
+function pasteParties(kind) {
+  const ta = $("#paste_" + kind); if (!ta) return;
+  let n = 0;
+  for (const line of ta.value.split(/\r?\n/)) {
+    const c = line.split("\t").map(x => x.trim());
+    if (c.length < 2 || !c[0] || /^(party|particulars|name|total|grand total)/i.test(c[0])) continue;
+    const cy = parseAmt(c[1]);
+    if (!cy && !parseAmt(c[3] || "")) continue;
+    S.parties[kind].push(kind === "debtors" ? { id: uid(), name: c[0], grp: c[2] || "", age: "lt6", st: "unsec", cy, py: parseAmt(c[3] || "") }
+      : { id: uid(), name: c[0], grp: c[2] || "", msme: /msme|micro|small/i.test(c[2] || "") ? "yes" : "no", cy, py: parseAmt(c[3] || "") });
+    n++;
+  }
+  ta.value = "";
+  touch(); render();
+  toast(n ? `Added ${n} part${n > 1 ? "ies" : "y"}.` : "No rows found. Each line needs a name and an amount separated by a tab.");
+}
+
+/* ---------------- render: note 3 ---------------- */
+const P_F = [["open", "Opening balance"], ["intro", "Addition during the year"], ["wd", "Withdrawal during the year"], ["int", "Interest on capital"], ["rem", "Partners' remuneration"]];
+function pageN3() {
+  const d = dates(S), y = p3Year, ow = S.info.ownerWord || "Partner";
+  const head = `<tr><th>Sr.</th><th>Name of ${esc(ow.toLowerCase())}</th><th class="num">Share in profit/loss (%)</th>${P_F.map(([, l]) => `<th class="num">${l}</th>`).join("")}<th class="num">Profit/(loss)</th><th class="num">Closing balance</th><th></th></tr>`;
+  const rows = S.partners.map((p, i) => `<tr><td class="tag">${i + 1}</td>
+    <td><input class="lbl-in" data-pn="${p.id}" value="${esc(p.name)}" placeholder="Name" aria-label="Name"></td>
+    <td class="num"><input class="amt" inputmode="decimal" data-ps="${p.id}" data-k="${y === "cy" ? "share" : "pshare"}" value="${esc(fmtIn(y === "cy" ? p.share : (p.pshare ?? p.share)))}" aria-label="Share %"></td>
+    ${P_F.map(([f, l]) => `<td class="num"><input class="amt" inputmode="decimal" data-p="${p.id}" data-y="${y}" data-f="${f}" value="${esc(fmtIn(p[y][f]))}" aria-label="${l}"></td>`).join("")}
+    <td class="num calc" data-calc="p.${p.id}.share.${y}"></td><td class="num calc" data-calc="p.${p.id}.close.${y}"></td>
+    <td><button class="rowx" data-pdel="${p.id}" aria-label="Remove">×</button></td></tr>`).join("");
+  const tot = `<tr class="tot"><td></td><td>Total</td><td class="num calc">${C["p.shareT." + y] ?? ""}%</td>${["open", "intro", "wd", "int", "rem", "share", "close"].map(f => `<td class="num calc" data-calc="p.T.${f}.${y}"></td>`).join("")}<td></td></tr>`;
+  return `<div class="page-head"><h1><span class="nno">Note ${NN("n3")}</span>Owners' capital account</h1><span class="status">Amount in ${esc(S.info.unit)}</span></div>
+  <p class="lead">Closing balance = opening + addition − withdrawal + interest on capital + partners' remuneration + profit/(loss). Remuneration flows to item X of the Statement of Profit and Loss and interest to Finance costs (Note ${NN("n23")}). The share of profit is worked out from the profit for the year and the sharing ratio.</p>
+  <div class="toolbar"><div class="tabs" role="tablist"><button data-p3="cy" class="${y === "cy" ? "on" : ""}">Year ended ${esc(d.cy)}</button><button data-p3="py" class="${y === "py" ? "on" : ""}">Year ended ${esc(d.py)}</button></div>
+  <button class="btn small" id="addPartner">+ Add ${esc(ow.toLowerCase())}</button></div>
+  <div class="sheet scroll"><table class="grid"><thead>${head}</thead><tbody>${rows}${tot}</tbody></table></div>
+  <div class="sheet"><label class="check"><input type="checkbox" id="allocChk" ${S.allocate ? "checked" : ""}>
+    <span><b>Credit the profit for the year to owners' capital accounts in the sharing ratio.</b><br><span class="status">Turn this off to keep profit as undistributed surplus in Note ${NN("n4")} instead.</span></span></label></div>
+  ${footBox("n3", "e.g. Rate of interest on capital, basis of remuneration, changes in constitution of the firm during the year.")}`;
+}
+
+/* ---------------- render: note 11 ---------------- */
+function faTable() {
+  const d = dates(S);
+  const inp = (a, f, lab) => `<td class="num"><input class="amt" inputmode="decimal" data-fa="${a.id}" data-f="${f}" value="${esc(fmtIn(a[f]))}" aria-label="${esc(a.name)} ${lab}"></td>`;
+  const cal = k => `<td class="num calc" data-calc="${k}"></td>`;
+  const head = `<tr class="grp"><th></th><th></th><th></th><th></th><th colspan="5">Gross Block</th><th>Depreciation</th><th>Net Block</th><th></th></tr>
+    <tr><th>Sr.</th><th>Particulars</th><th>Block</th><th class="num" style="min-width:70px;width:70px">% of Deprn.</th><th class="num">Opg. Bal. ${esc(d.cyStart)}</th><th class="num">Additions – used 180 days or more</th><th class="num">Additions – used less than 180 days</th>
+    <th class="num">Sale / adj. during the year</th><th class="num">Clg. Bal. ${esc(d.cy)}</th><th class="num">Provided during the year</th><th class="num">W.D.V. as on ${esc(d.cy)}</th><th></th></tr>`;
+  const rows = S.fa.assets.map((a, i) => `<tr><td class="tag">${i + 1}</td>
+    <td class="lbl"><input class="lbl-in" data-fan="${a.id}" value="${esc(a.name)}" placeholder="Block of asset" aria-label="Block of asset"></td>
+    <td class="num" style="min-width:110px"><select data-fak="${a.id}" aria-label="Block type"><option value="t" ${a.kind !== "i" ? "selected" : ""}>Tangible</option><option value="i" ${a.kind === "i" ? "selected" : ""}>Intangible</option></select></td>
+    <td class="num" style="min-width:70px;width:70px"><input class="amt" inputmode="decimal" data-fa="${a.id}" data-f="rate" value="${esc(fmtIn(a.rate))}" aria-label="Rate"></td>
+    ${inp(a, "open", "opening")}${inp(a, "add1", "additions 180 days or more")}${inp(a, "add2", "additions less than 180 days")}${inp(a, "sale", "sale")}
+    ${cal(`fa.${a.id}.close`)}${cal(`fa.${a.id}.dep`)}${cal(`fa.${a.id}.wdv`)}
+    <td><button class="rowx" data-fadel="${a.id}" aria-label="Remove block">×</button></td></tr>`).join("");
+  const pin = (f, span) => `<td class="num"${span ? ` colspan="${span}"` : ""}><input class="amt" inputmode="decimal" data-fapy="${f}" value="${esc(fmtIn(S.fa.py?.[f]))}" aria-label="Previous year ${f}"></td>`;
+  return `<div class="sheet scroll"><table class="grid fa"><thead>${head}</thead><tbody>${rows}
+    <tr class="addrow"><td class="tag"></td><td><button class="btn small" id="addAsset">+ Add block</button></td>${'<td class="num"></td>'.repeat(9)}<td></td></tr>
+    <tr class="tot"><td class="tag"></td><td>Total</td><td class="num"></td><td class="num"></td>${["open", "add1", "add2", "sale", "close", "dep", "wdv"].map(k => cal("fa.T." + k)).join("")}<td></td></tr>
+    <tr><td class="tag"></td><td>Previous Year <span class="status">(totals, year ended ${esc(d.py)})</span></td><td class="num"></td><td class="num"></td>${pin("open")}${pin("add", 2)}${pin("sale")}${cal("fa.py.close")}${pin("dep")}${cal("fa.py.wdv")}<td></td></tr>
+    </tbody></table></div>`;
+}
+function wipTable(w, title) {
+  const d = dates(S);
+  const inp = f => `<td class="num"><input class="amt" inputmode="decimal" data-wip="${w}" data-f="${f}" value="${esc(fmtIn(S[w][f]))}" aria-label="${title} ${f}"></td>`;
+  const cal = k => `<td class="num calc" data-calc="${w}.${k}"></td>`;
+  return `<div class="sheet scroll"><table class="grid"><thead><tr><th>${esc(title)}</th><th class="num">${d.cy}</th><th class="num">${d.py}</th></tr></thead><tbody>
+    <tr><td>Opening balance</td>${cal("open_cy")}${inp("open")}</tr>
+    <tr><td>Add: Additions during the year</td>${inp("add_cy")}${inp("add_py")}</tr>
+    <tr><td>Less: Capitalised during the year</td>${inp("cap_cy")}${inp("cap_py")}</tr>
+    <tr class="tot"><td>Closing balance</td>${cal("close_cy")}${cal("close_py")}</tr></tbody></table></div>`;
+}
+function pageN11() {
+  return `<div class="page-head"><h1><span class="nno">Note ${NN("n11")}</span>Fixed assets</h1><span class="status">Amount in ${esc(S.info.unit)}</span></div>
+  <p class="lead">Written down value method. Depreciation = (opening + additions used 180 days or more − sale) × rate, plus additions used less than 180 days × half the rate. W.D.V. of tangible and intangible blocks flows to the Balance Sheet, and depreciation to Note 24. Enter the previous year as totals.</p>
+  ${faTable()}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">${wipTable("cwip", "Capital work-in-progress")}${wipTable("iaud", "Intangible assets under development")}</div>
+  ${footBox("n11", "Assets under lease to be separately specified under each class of asset. Revaluation details, if any.")}`;
+}
+
+/* ---------------- render: statements ---------------- */
+function stmtTable(rows, d, tail) {
+  return `<table class="st"><thead><tr><th></th><th>Particulars</th><th>Note</th><th>${esc(d.cy)}</th><th class="gap"></th><th>${esc(d.py)}</th></tr></thead><tbody>` +
+    rows.map(([t, tag, label, note, key]) => {
+      const nt = note ? `<button class="link" data-go="${note}">${NN(note)}</button>` : "";
+      const v = key ? [C[key + ".cy"], C[key + ".py"]] : null;
+      return `<tr class="${t}"><td class="tag">${esc(tag)}</td><td class="lb">${esc(label)}</td><td class="nt">${nt}</td>${v ? `<td class="v">${fmt(v[0])}</td><td class="gap"></td><td class="v">${fmt(v[1])}</td>` : '<td class="v"></td><td class="gap"></td><td class="v"></td>'}</tr>`;
+    }).join("") + (tail || []).map(t => `<tr><td class="tag"></td><td class="lb">${t[0]}</td><td class="nt">${t[1] || ""}</td><td class="v"></td><td class="gap"></td><td class="v"></td></tr>`).join("") + "</tbody></table>";
+}
+function sigBlock() {
+  const i = S.info, ow = i.ownerWord || "Partner";
+  const names = S.partners.filter(p => p.name).map(p => `<div class="line">${esc(p.name)}<br><span class="status">${esc(ow)}</span></div>`).join("");
+  return `<div class="sig"><div>${i.caFirm ? `As per our report of even date<br>For <b>${esc(i.caFirm)}</b><br>Chartered Accountants<br>${i.frn ? "FRN: " + esc(i.frn) : ""}<div class="line">${esc(i.caName)}<br><span class="status">Partner${i.mno ? " · M. No. " + esc(i.mno) : ""}</span></div>` : ""}
+    <div class="line status">Place: ${esc(i.place)}<br>Date: ${esc(i.date)}</div></div>
+    <div>For <b>${esc(i.name)}</b>${names}</div></div>`;
+}
+function bsRows() {
+  return [
+    ["h", "I", "EQUITY AND LIABILITIES"], ["h", "1", "Owners' funds"],
+    ["r", "(a)", "Owners' capital account", "n3", "bs.cap"], ["r", "(b)", "Reserves and surplus", "n4", "bs.res"], ["s", "", "", "", "bs.of"],
+    ["h", "2", "Non-current liabilities"],
+    ["r", "(a)", "Long-term borrowings", "n5a", "bs.ltb"], ["r", "(b)", "Deferred tax liabilities (net)", "n6", "bs.dtl"],
+    ["r", "(c)", "Other long-term liabilities", "n7", "bs.oltl"], ["r", "(d)", "Long-term provisions", "n8", "bs.ltp"], ["s", "", "", "", "bs.ncl"],
+    ["h", "3", "Current liabilities"],
+    ["r", "(a)", "Short-term borrowings", "n5b", "bs.stb"], ["r", "(b)", "Trade payables", "n9", "bs.tp"],
+    ["r", "(c)", "Other current liabilities", "n10", "bs.ocl"], ["r", "(d)", "Short-term provisions", "n8", "bs.stp"], ["s", "", "", "", "bs.cl"],
+    ["T", "", "TOTAL", "", "bs.el"],
+    ["h", "II", "ASSETS"], ["h", "1", "Non-current assets"],
+    ["r", "(a)", "Property, plant and equipment and intangible assets"],
+    ["rr", "(i)", "Property, plant and equipment", "n11", "bs.ppe"], ["rr", "(ii)", "Intangible assets", "n11", "bs.intang"],
+    ["rr", "(iii)", "Capital work-in-progress", "n11", "bs.cwip"], ["rr", "(iv)", "Intangible assets under development", "n11", "bs.iaud"],
+    ["r", "(b)", "Non-current investments", "n12a", "bs.nci"], ["r", "(c)", "Deferred tax assets (net)", "n6", "bs.dta"],
+    ["r", "(d)", "Long-term loans and advances", "n13", "bs.ltla"], ["r", "(e)", "Other non-current assets", "n14", "bs.onca"], ["s", "", "", "", "bs.nca"],
+    ["h", "2", "Current assets"],
+    ["r", "(a)", "Current investments", "n12b", "bs.ci"], ["r", "(b)", "Inventories", "n15", "bs.inv"], ["r", "(c)", "Trade receivables", "n16", "bs.tr"],
+    ["r", "(d)", "Cash and bank balances", "n17", "bs.cash"], ["r", "(e)", "Short-term loans and advances", "n13", "bs.stla"], ["r", "(f)", "Other current assets", "n18", "bs.oca"], ["s", "", "", "", "bs.ca"],
+    ["T", "", "TOTAL", "", "bs.as"],
+  ];
+}
+function pageBS() {
+  const d = dates(S), rows = bsRows();
+  return `<div class="page-head"><h1>Balance Sheet</h1><span class="status">Prepared automatically from the notes. Tap a note number to edit it.</span></div>
+  ${diffBanner()}
+  <div class="sheet scroll"><div class="stmt"><p class="ent">${esc(S.info.name)}</p><p class="ttl">Balance Sheet as at ${esc(d.cy)}</p>
+  <div class="unit">(Amount in ${esc(S.info.unit)})</div>${stmtTable(rows, d, [["&nbsp;"], ["Brief about the Entity", "1"], ["Summary of significant accounting policies", "2"], ["&nbsp;"], ["The accompanying notes are an integral part of the financial statements"]])}
+  ${sigBlock()}</div></div>`;
+}
+function plRows() {
+  return [
+    ["r", "I", "Revenue from operations", "n19", "pl.rev"], ["r", "II", "Other income", "n20", "pl.oi"], ["T", "III", "Total income (I + II)", "", "pl.ti"],
+    ["h", "IV", "Expenses"],
+    ["r", "(a)", "Cost of goods sold", "n21", "pl.cogs"], ["r", "(b)", "Employee benefits expense", "n22", "pl.emp"], ["r", "(c)", "Finance costs", "n23", "pl.fin"],
+    ["r", "(d)", "Depreciation and amortisation expense", "n24", "pl.dep"], ["r", "(e)", "Other expenses", "n25", "pl.oth"], ["s", "", "Total expenses", "", "pl.exp"],
+    ["h", "V", "Profit/(loss) before exceptional and extraordinary items, partners' remuneration and tax (III − IV)", "", "pl.v"],
+    ["r", "VI", "Exceptional items", "tx", "pl.exc"],
+    ["h", "VII", "Profit/(loss) before extraordinary items, partners' remuneration and tax (V − VI)", "", "pl.vii"],
+    ["r", "VIII", "Extraordinary items", "tx", "pl.ext"],
+    ["h", "IX", "Profit before partners' remuneration and tax (VII − VIII)", "", "pl.ix"],
+    ["r", "X", "Partners' remuneration", "n3", "pl.rem"],
+    ["h", "XI", "Profit before tax (IX − X)", "", "pl.pbt"],
+    ["h", "XII", "Tax expense"],
+    ["r", "(a)", "Current tax", "tx", "pl.cur"], ["r", "(b)", "Excess / short provision of tax relating to earlier years", "tx", "pl.ey"],
+    ["r", "(c)", "Deferred tax charge/(benefit)", "n6", "pl.def"], ["s", "", "", "", "pl.tax"],
+    ["h", "XIII", "Profit/(loss) for the period from continuing operations (XI − XII)", "", "pl.cont"],
+    ["r", "XIV", "Profit/(loss) from discontinuing operations", "tx", "pl.dp"],
+    ["r", "XV", "Tax expense of discontinuing operations", "tx", "pl.dt"],
+    ["h", "XVI", "Profit/(loss) from discontinuing operations after tax (XIV − XV)", "", "pl.disc"],
+    ["T", "XVII", "Profit/(loss) for the year (XIII + XVI)", "", "pl.profit"],
+  ];
+}
+function pagePL() {
+  const d = dates(S), rows = plRows();
+  return `<div class="page-head"><h1>Statement of Profit and Loss</h1><span class="status">Prepared automatically from the notes.</span></div>
+  <div class="sheet scroll"><div class="stmt"><p class="ent">${esc(S.info.name)}</p><p class="ttl">Statement of Profit and Loss for the year ended ${esc(d.cy)}</p>
+  <div class="unit">(Amount in ${esc(S.info.unit)})</div>${stmtTable(rows, d, [["&nbsp;"], ["The accompanying notes are an integral part of the financial statements"], ["<i>* wherever applicable</i>"]])}
+  ${sigBlock()}</div></div>`;
+}
+function diffBanner() {
+  const bad = ["cy", "py"].filter(y => Math.abs(C["bs.diff." + y]) >= 0.5 / Math.pow(10, DEC));
+  if (!bad.length) return "";
+  const d = dates(S);
+  return `<div class="banner" style="background:var(--bad-soft)"><b style="color:var(--bad)">Does not tally.</b> ${bad.map(y => `Difference as at ${d[y]}: ${fmt(C["bs.diff." + y])}`).join(" · ")} <button class="link" data-go="checks">See checks</button></div>`;
+}
+function pageChecks() {
+  const ck = checks();
+  return `<div class="page-head"><h1>Checks</h1></div><p class="lead">These run every time you change a figure.</p>
+  <div class="checks">${ck.map(c => `<div class="chk ${c.s}"><span class="ic">${c.s === "ok" ? "✓" : c.s === "bad" ? "✕" : "!"}</span><span>${esc(c.t)} ${c.go ? `<button class="link" data-go="${c.go}">Open</button>` : ""}</span></div>`).join("")}</div>`;
+}
+
+/* ---------------- render: setup ---------------- */
+function pageInfo() {
+  const i = S.info;
+  const f = (k, l, t = "text", extra = "") => `<div class="field"><label for="i_${k}">${l}</label><input class="txt" id="i_${k}" type="${t}" data-info="${k}" value="${esc(i[k])}" ${extra}></div>`;
+  const sel = (k, l, opts) => `<div class="field"><label for="i_${k}">${l}</label><select id="i_${k}" data-info="${k}">${opts.map(o => `<option ${String(i[k]) === String(o[0]) ? "selected" : ""} value="${esc(o[0])}">${esc(o[1])}</option>`).join("")}</select></div>`;
+  const types = ["Sole proprietorship", "Partnership firm", "Limited liability partnership", "Hindu undivided family", "Association of persons / body of individuals", "Trust", "Society", "Other non-corporate entity"].map(x => [x, x]);
+  const sample = S.isSample ? `<div class="banner"><b>Example data.</b> This entity is filled with made-up figures so you can see how the statements build up. Start your own with <button class="btn small" id="newEntity2">+ New entity</button></div>` : "";
+  return `<div class="page-head"><h1>Entity details</h1></div>${sample}
+  <p class="lead">Fill these first. Then enter figures note by note from the menu. You never type on the face of the Balance Sheet or the Statement of Profit and Loss; they are drawn from the notes.</p>
+  <div class="sheet"><div class="form">
+    ${f("name", "Name of the entity")}
+    ${sel("type", "Type of entity", types)}
+    ${f("fyEnd", "Financial year ends on", "date")}
+    ${sel("unit", "Amounts are entered in", [["Rs.", "Rupees"], ["Rs. in thousands", "Rupees in thousands"], ["Rs. in lakhs", "Rupees in lakhs"], ["Rs. in crores", "Rupees in crores"]])}
+    ${sel("dec", "Decimals shown", [[0, "None"], [2, "Two"]])}
+    ${sel("skipNil", "Lines with nil in both years (Excel)", [["", "Print every line of the format"], ["true", "Leave them out"]])}
+    ${sel("ownerWord", "Owners are called", [["Partner", "Partner"], ["Proprietor", "Proprietor"], ["Member", "Member"], ["Karta / Coparcener", "Karta / Coparcener"], ["Trustee", "Trustee"]])}
+  </div></div>
+  <h2 style="font-family:var(--font-doc);font-size:18px;margin:6px 0 0">Signing block</h2>
+  <div class="sheet"><div class="form">
+    ${f("caFirm", "Auditor's firm name")}${f("frn", "Firm registration no. (FRN)")}${f("caName", "Signing partner")}${f("mno", "Membership no.")}
+    ${f("place", "Place")}${f("date", "Date of signing")}
+  </div></div>
+  <div class="sheet"><div class="foot"><label>Remove this entity</label>
+    ${deleteArmed ? `<div class="confirm">Delete <b>${esc(i.name)}</b> and all its figures? This cannot be undone. <button class="btn danger small" id="delYes">Delete</button><button class="btn small" id="delNo">Keep</button></div>`
+      : `<div><button class="btn danger small" id="delEntity">Delete entity…</button></div>`}</div></div>`;
+}
+function pageN1() {
+  return `<div class="page-head"><h1><span class="nno">Notes 1–2</span>About the entity and accounting policies</h1></div>
+  <div class="sheet foot"><label for="t_about">Note 1 · Brief about the entity</label><textarea id="t_about" class="big" style="min-height:140px" data-infotxt="about" placeholder="Constitution, date of formation, registered office, nature of business, names of partners / proprietor…">${esc(S.info.about)}</textarea></div>
+  <div class="sheet foot"><label for="t_pol">Note 2 · Significant accounting policies</label><textarea id="t_pol" class="big" style="min-height:420px" data-infotxt="policies">${esc(S.info.policies)}</textarea></div>`;
+}
+
+/* ---------------- main render ---------------- */
+function render() {
+  if (!S) return;
+  compute();
+  renderNav();
+  let html;
+  if (route === "info") html = pageInfo();
+  else if (route === "n1") html = pageN1();
+  else if (route === "bs") html = pageBS();
+  else if (route === "pl") html = pagePL();
+  else if (route === "checks") html = pageChecks();
+  else if (route === "n3") html = pageN3();
+  else if (route === "n11") html = pageN11();
+  else if (NOTE_BY[route]) html = pageNote(NOTE_BY[route]);
+  else { route = "info"; html = pageInfo(); }
+  $("#page").innerHTML = html;
+  refresh();
+  renderEntities();
+}
+function refresh() {
+  compute();
+  document.querySelectorAll("[data-calc]").forEach(el => { el.textContent = fmt(C[el.dataset.calc]); });
+  const ck = checks(), pill = $("#checkPill");
+  const bad = ck.filter(c => c.s === "bad").length, warn = ck.filter(c => c.s === "warn").length;
+  pill.className = "pill " + (bad ? "bad" : warn ? "warn" : "ok");
+  pill.textContent = bad ? (Math.abs(C["bs.diff.cy"]) >= 0.5 / Math.pow(10, DEC) ? `Difference ${fmt(C["bs.diff.cy"])}` : `${bad} issue${bad > 1 ? "s" : ""}`) : warn ? `Tallied · ${warn} note${warn > 1 ? "s" : ""}` : "Tallied";
+  if (route === "n3") { const t = document.querySelector(".tot td:nth-child(3)"); if (t) t.textContent = (C["p.shareT." + p3Year] ?? 0) + "%"; }
+}
+$("#checkPill").addEventListener("click", () => go("checks"));
+
+/* ---------------- events ---------------- */
+const page = $("#page");
+page.addEventListener("input", e => {
+  const t = e.target, ds = t.dataset;
+  if (ds.n) { setV(ds.n, ds.r, ds.c, ds.text ? t.value : parseAmt(t.value)); }
+  else if (ds.xl) { const x = (S.extra[ds.xl] || []).find(x => x.id === ds.xid); if (x) x.label = t.value; }
+  else if (ds.p) { const p = S.partners.find(p => p.id === ds.p); p[ds.y][ds.f] = parseAmt(t.value); }
+  else if (ds.ps) { const p = S.partners.find(p => p.id === ds.ps); p[ds.k] = parseAmt(t.value); }
+  else if (ds.pn) { S.partners.find(p => p.id === ds.pn).name = t.value; }
+  else if (ds.fa) { S.fa.assets.find(a => a.id === ds.fa)[ds.f] = parseAmt(t.value); }
+  else if (ds.fan) { S.fa.assets.find(a => a.id === ds.fan).name = t.value; }
+  else if (ds.fak) { S.fa.assets.find(a => a.id === ds.fak).kind = t.value; }
+  else if (ds.fapy) { (S.fa.py ||= {})[ds.fapy] = parseAmt(t.value); }
+  else if (ds.pt) {
+    const p = S.parties[ds.pt].find(x => x.id === ds.pid); const f = ds.pf;
+    p[f] = f === "cy" || f === "py" ? parseAmt(t.value) : t.value;
+    if (f === "age" || f === "st" || f === "msme") { touch(); render(); return; }
+  }
+  else if (ds.wip) { S[ds.wip][ds.f] = parseAmt(t.value); }
+  else if (ds.txt) { S.text[ds.txt] = t.value; }
+  else if (ds.infotxt) { S.info[ds.infotxt] = t.value; }
+  else if (ds.info) { S.info[ds.info] = t.type === "number" ? num(t.value) : t.value; if (ds.info === "name") renderEntities(); }
+  else return;
+  touch(); refresh();
+});
+page.addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.info && (t.tagName === "SELECT" || t.type === "date")) { S.info[t.dataset.info] = t.dataset.info === "dec" ? num(t.value) : t.dataset.info === "skipNil" ? !!t.value : t.value; touch(); render(); }
+  if (t.id === "allocChk") { S.allocate = t.checked; touch(); refresh(); }
+});
+page.addEventListener("focusout", e => {
+  const t = e.target;
+  if (t.classList.contains("amt") && !t.dataset.text) t.value = fmtIn(parseAmt(t.value));
+});
+page.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const ds = b.dataset;
+  if (ds.go) return go(ds.go);
+  if (ds.add) { (S.extra[ds.add] ||= []).push({ id: uid(), label: "" }); touch(); render(); const ins = page.querySelectorAll(`[data-xl="${ds.add}"]`); ins[ins.length - 1]?.focus(); return; }
+  if (ds.xdel) {
+    S.extra[ds.xdel] = (S.extra[ds.xdel] || []).filter(x => x.id !== ds.xid);
+    const [n, sec] = ds.xdel.split("."); if (S.vals[n]) delete S.vals[n][sec + ".x_" + ds.xid];
+    touch(); render(); return;
+  }
+  if (ds.p3) { p3Year = ds.p3; render(); return; }
+  if (b.id === "addPartner") { S.partners.push({ id: uid(), name: "", share: 0, pshare: 0, cy: {}, py: {} }); touch(); render(); return; }
+  if (ds.pdel) { S.partners = S.partners.filter(p => p.id !== ds.pdel); touch(); render(); return; }
+  if (b.id === "addAsset") { S.fa.assets.push({ id: uid(), name: "", kind: "t", rate: 15 }); touch(); render(); const ins = page.querySelectorAll("[data-fan]"); ins[ins.length - 1]?.focus(); return; }
+  if (ds.padd) { S.parties[ds.padd].push(ds.padd === "debtors" ? { id: uid(), name: "", grp: "", age: "lt6", st: "unsec" } : { id: uid(), name: "", grp: "", msme: "no" }); touch(); render(); const ins = page.querySelectorAll(`[data-pt="${ds.padd}"][data-pf="name"]`); ins[ins.length - 1]?.focus(); return; }
+  if (ds.ptdel) { S.parties[ds.ptdel] = S.parties[ds.ptdel].filter(x => x.id !== ds.pid); touch(); render(); return; }
+  if (ds.paste) { pasteParties(ds.paste); return; }
+  if (ds.fadel) { S.fa.assets = S.fa.assets.filter(a => a.id !== ds.fadel); touch(); render(); return; }
+  if (b.id === "delEntity") { deleteArmed = true; render(); return; }
+  if (b.id === "delNo") { deleteArmed = false; render(); return; }
+  if (b.id === "delYes") { deleteEntity(S.id); return; }
+  if (b.id === "newEntity2") { newEntity(); return; }
+});
+
+/* ---------------- entities & storage ---------------- */
+let db = null, dbUid = null, saveTimer = null, dbReady = false;
+const LS = "nce-fs-v1";
+function lsLoad() { try { return JSON.parse(localStorage.getItem(LS) || "null"); } catch { return null; } }
+function lsSave() { try { localStorage.setItem(LS, JSON.stringify({ ents: ENT, cur: S?.id })); } catch {} }
+function setStatus(t) { $("#saveStatus").textContent = t; }
+function touch() {
+  S.updatedAt = Date.now(); if (S.isSample) S.isSample = false;
+  setStatus("Saving…");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 900);
+}
+async function saveNow() {
+  lsSave();
+  if (db && dbUid) {
+    try {
+      await db.collection("data/users/" + dbUid).doc(S.id).set({ name: S.info.name, updatedAt: S.updatedAt, data: JSON.stringify(S) });
+      setStatus("Saved");
+    } catch (e) { setStatus("Saved in this browser"); }
+  } else setStatus(dbReady ? "Saved on this device only" : "Saved");
+}
+function renderEntities() {
+  const list = Object.values(ENT).sort((a, b) => (a.info.name || "").localeCompare(b.info.name || ""));
+  $("#entitySel").innerHTML = list.map(e => `<option value="${e.id}" ${e.id === S.id ? "selected" : ""}>${esc(e.info.name || "Untitled")}</option>`).join("");
+}
+$("#entitySel").addEventListener("change", e => { S = ENT[e.target.value]; lsSave(); render(); });
+function newEntity(state) {
+  const s = state || blankState("New entity");
+  ENT[s.id] = s; S = s; touch(); route = "info"; if (location.hash !== "#info") location.hash = "info"; else render();
+  render(); toast(state ? "Entity restored from backup." : "New entity created. Start with its name and year end.");
+}
+$("#newEntityBtn").addEventListener("click", () => newEntity());
+async function deleteEntity(id) {
+  delete ENT[id];
+  if (db && dbUid) { try { await db.collection("data/users/" + dbUid).doc(id).delete(); } catch {} }
+  const rest = Object.values(ENT);
+  S = rest[0] || blankState("New entity"); ENT[S.id] = S;
+  deleteArmed = false; lsSave(); go("info"); render(); toast("Entity deleted.");
+}
+
+/* ---------------- export ---------------- */
+async function offerFile(filename, data) {
+  const dl = await (window.claude?.use ? window.claude.use("downloads") : null);
+  if (!dl) {
+    const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type: "application/json" }));
+    const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return;
+  }
+  try { await dl.save({ filename, data }); } catch (e) { if (e?.code !== "declined") toast("Could not save the file (" + (e?.code || "error") + ")."); }
+}
+function safeName() { return (S.info.name || "Entity").replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "Entity"; }
+$("#backupBtn").addEventListener("click", () => offerFile(safeName() + " backup.json", JSON.stringify(S, null, 1)));
+$("#restoreFile").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try { const s = JSON.parse(rd.result); if (!s.info || !s.vals) throw 0; s.id = uid(); s.isSample = false; newEntity(normalize(s)); }
+    catch { toast("That file is not a backup from this tool."); }
+    e.target.value = "";
+  };
+  rd.readAsText(f);
+});
+/* ---------------- Excel export: styled like the ICAI NCE format workbook ---------------- */
+// Trebuchet MS 10, boxed value columns, accounting number style; statements portrait A4, notes landscape A4; printed at 100%, opened at 110%
+const XF = "Trebuchet MS";
+let RH = 13.5;
+const ACC = () => DEC ? '_ * #,##0.00_ ;_ * \\-#,##0.00_ ;_ * "-"??_ ;_ @_ ' : '_ * #,##0_ ;_ * \\-#,##0_ ;_ * "-"??_ ;_ @_ ';
+function nLines(text, w) { return String(text ?? "").split("\n").reduce((n, p) => n + Math.max(1, Math.ceil(p.length / (w * 1.15))), 0); }
+const hFor = (text, w, min = 1) => RH * Math.max(min, nLines(text, w));
+const cell = (c, v, o = {}) => ({ c, v, ...o });
+function addB(x, side, style = "thin") { x.border = { ...(x.border || {}), [side]: { style } }; }
+
+class XSheet {
+  constructor(wb, name, widths, opt) {
+    this.ws = wb.addWorksheet(name, {
+      views: [{ zoomScale: 110, zoomScaleNormal: 110, showGridLines: false }],
+      pageSetup: { paperSize: 9, orientation: opt.orient, fitToPage: false, scale: 100, horizontalCentered: true,
+        margins: opt.margins, printTitlesRow: opt.titles || undefined },
+      headerFooter: { oddFooter: `&R&"Trebuchet MS,Regular"&8Page &P of &N` },
+    });
+    this.ws.columns = widths.map(w => ({ width: w }));
+    this.W = widths; this.N = widths.length; this.r = 0; this.used = 0; this.avail = opt.avail; this.body = 0;
+  }
+  pageBreak() { if (this.r > this.body) { this.ws.getRow(this.r).addPageBreak(); this.used = 0; } }
+  row(spec) {
+    const h = spec.h || RH;
+    if (this.used + h > this.avail) this.pageBreak();
+    this.r++;
+    const row = this.ws.getRow(this.r); row.height = h;
+    for (const c of spec.cells || []) {
+      if (c.to && c.to > c.c) this.ws.mergeCells(this.r, c.c, this.r, c.to);
+      const x = row.getCell(c.c), isNum = typeof c.v === "number";
+      if (c.v !== undefined && c.v !== null && c.v !== "") x.value = c.v;
+      x.font = { name: XF, size: c.sz || 10, bold: !!c.b, italic: !!c.i, underline: !!c.u };
+      x.alignment = { vertical: c.va || "top", horizontal: c.al || (isNum ? undefined : "left"), wrapText: !isNum, indent: c.ind || 0 };
+      if (isNum) x.numFmt = c.fmt || ACC();
+      const last = c.to || c.c;
+      for (let k = c.c; k <= last; k++) {
+        const y = row.getCell(k);
+        if (c.box) { addB(y, "top"); addB(y, "bottom"); if (k === c.c) addB(y, "left"); if (k === last) addB(y, "right"); }
+        if (c.bt) addB(y, "top");
+        if (c.bb) addB(y, "bottom", c.bb === 2 ? "double" : "thin");
+      }
+    }
+    // frame: vertical rules of the note's box, plus top/bottom edge
+    if (spec.frame) {
+      for (const k of spec.frame.l || []) addB(row.getCell(k), "left");
+      for (const k of spec.frame.r || []) addB(row.getCell(k), "right");
+      const [a, b] = spec.frame.span || [1, this.N];
+      if (spec.top) for (let k = a; k <= b; k++) addB(row.getCell(k), "top");
+      if (spec.bottom) for (let k = a; k <= b; k++) addB(row.getCell(k), "bottom");
+    }
+    this.used += h;
+  }
+  block(rows) {
+    const tot = rows.reduce((a, r) => a + (r.h || RH), 0);
+    // keep a block whole when it fits on a page; a longer one starts on a fresh page unless most of this page is free
+    if (this.used > 0 && this.used + tot > this.avail && (tot <= this.avail || this.avail - this.used < this.avail * 0.4)) this.pageBreak();
+    rows.forEach(r => this.row(r));
+  }
+  gap(h = 10) { if (this.used > 0 && this.used + h <= this.avail) this.row({ h }); }
+}
+function framed(rows, frame) {
+  rows.forEach(r => r.frame = frame);
+  if (rows.length) { rows[0].top = true; rows[rows.length - 1].bottom = true; }
+  return rows;
+}
+
+function sigRows(L, R1, R2) {
+  const i = S.info, ow = i.ownerWord || "Partner", ps = S.partners.filter(p => p.name), out = [];
+  const R = (a, b, o = {}) => [cell(R1, a, { al: "center", ...o }), cell(R2, b, { al: "center", ...o })];
+  out.push({ cells: [cell(L, i.caFirm ? "As per our report of even date" : ""), cell(R1, "For " + i.name, { to: R2, b: true, al: "center" })], h: hFor("For " + i.name, 34) });
+  if (i.caFirm) {
+    out.push({ cells: [cell(L, "For " + i.caFirm, { b: true })] });
+    out.push({ cells: [cell(L, "Chartered Accountants" + (i.frn ? " (FRN " + i.frn + ")" : ""))] });
+  }
+  for (let k = 0; k < Math.max(ps.length, 1); k += 2) {
+    out.push({ h: 24 });
+    out.push({ cells: [cell(L, k === 0 ? (i.caName || "") + (i.caFirm ? ", Partner" + (i.mno ? " (M. No. " + i.mno + ")" : "") : "") : "", { b: true }), ...R(ps[k]?.name || "", ps[k + 1]?.name || "", { b: true })] });
+    out.push({ cells: [cell(L, ""), ...R(ps[k] ? ow : "", ps[k + 1] ? ow : "")] });
+  }
+  out.push({ cells: [cell(L, "Place: " + (i.place || "") + "      Date: " + (i.date || "")), cell(R1, "Place: " + (i.place || "") + "      Date: " + (i.date || ""), { to: R2, al: "center" })] });
+  return out;
+}
+
+/* Balance Sheet / P&L: A tag | B particulars | C note | D current year | E gap | F previous year */
+function xlStatement(wb, kind) {
+  const d = dates(S), bs = kind === "bs";
+  RH = 12.75;
+  const X = mkSheet(wb, bs ? "Balance Sheet" : "Statement of P&L", [6, 48.5, 6.5, 17, 1.2, 17],
+    { orient: "portrait", avail: 780, margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.45, header: 0.2, footer: 0.2 } });
+  X.row({ cells: [cell(1, S.info.name, { to: 6, b: true })] });
+  X.row({ cells: [cell(1, bs ? `Balance Sheet as at ${d.cy}` : `Statement of Profit and Loss for the year ended ${d.cy}`, { to: 6, b: true })] });
+  X.row({ cells: [cell(4, `(Amount in ${S.info.unit})`, { to: 6, b: true, al: "right" })] });
+  const fr = { l: [1, 3, 4, 6], r: [2, 3, 4, 6] };
+  X.row({ h: 15, frame: fr, top: true, bottom: true, cells: [cell(2, "Particulars", { b: true, va: "middle" }), cell(3, "Note", { b: true, al: "center", va: "middle" }),
+    cell(4, d.cy, { b: true, al: "center", va: "middle", box: 1 }), cell(6, d.py, { b: true, al: "center", va: "middle", box: 1 })] });
+  X.body = X.r;
+  X.row({ h: 6, frame: fr });
+  for (const [t, tag, label, note, key] of (bs ? bsRows() : plRows())) {
+    const strong = t === "h" || t === "T";
+    const nt = note ? NN(note) : "";
+    const cells = [cell(1, tag, { b: strong, al: "center" }), cell(2, label, { b: strong, ind: t === "rr" ? 2 : 0 }), cell(3, nt, { al: "center" })];
+    if (key) for (const [i, y] of [[4, "cy"], [6, "py"]]) cells.push(cell(i, num(C[key + "." + y]), { b: strong || t === "s", bt: t === "s" || t === "T" ? 1 : 0, bb: t === "T" ? 2 : t === "s" ? 1 : 0 }));
+    if (t === "h" && !key && X.r > X.body + 1) X.row({ h: 4, frame: fr });
+    X.row({ cells, frame: fr, h: hFor(label, 47) });
+  }
+  X.row({ h: 6, frame: fr });
+  X.row({ frame: fr, cells: [cell(2, "Brief about the Entity"), cell(3, "1", { al: "center" })] });
+  X.row({ frame: fr, cells: [cell(2, "Summary of significant accounting policies"), cell(3, "2", { al: "center" })] });
+  X.row({ h: 4, frame: fr });
+  if (!bs) X.row({ frame: fr, cells: [cell(2, "* wherever applicable", { i: true })] });
+  X.row({ frame: fr, bottom: true, cells: [cell(2, "The accompanying notes are an integral part of the financial statements")], h: hFor("The accompanying notes are an integral part of the financial statements", 47) });
+  X.row({ h: 8 });
+  X.block(sigRows(2, 4, 6));
+  RH = 13.5;
+}
+
+/* Notes sheet (portrait): A tag | B particulars | C–G five amount columns; each note boxed with vertical rules */
+const NW = [4.5, 31, 12, 12, 12, 12, 12];
+const LAY = {
+  C2: { to: 5, cols: { cy: 6, py: 7 }, l: [1, 2, 6, 7] },
+  C4: { to: 3, cols: { lt_cy: 4, lt_py: 5, st_cy: 6, st_py: 7 }, l: [1, 2, 4, 5, 6, 7] },
+  INV: { to: 2, cols: { fv: 3, n_cy: 4, cy: 5, n_py: 6, py: 7 }, l: [1, 2, 3, 4, 5, 6, 7] },
+};
+const TXT_W = 91;
+const lblW = to => NW.slice(1, to).reduce((a, b) => a + b, 0);
+const hd = (c, v, o = {}) => cell(c, v, { b: true, al: "center", va: "middle", box: 1, ...o });
+function noteTitle(no, title, extra = [], to = 7) { return { cells: [cell(1, no, { b: true, al: "center" }), cell(2, title, { to, b: true }), ...extra], h: Math.max(28, hFor(title, lblW(to + 1))) }; }
+function noteHead(note) {
+  const d = dates(S), L = LAY[note.cols], no = NN(note.id);
+  if (note.cols === "C2") return [noteTitle(no, note.title, [hd(6, d.cy), hd(7, d.py)], 5)];
+  if (note.cols === "C4") return [noteTitle(no, note.title, [hd(4, "Long term", { to: 5 }), hd(6, "Short term", { to: 7 })], 3),
+    { h: 28, cells: [hd(4, d.cy), hd(5, d.py), hd(6, d.cy), hd(7, d.py)] }];
+  return [noteTitle(no, note.title, [hd(4, d.cy, { to: 5 }), hd(6, d.py, { to: 7 })], 2),
+    { h: 28, cells: [cell(2, note.lead || "", { i: true, va: "middle" }), hd(3, "Face value"), hd(4, "Nos. / units"), hd(5, "Book value"), hd(6, "Nos. / units"), hd(7, "Book value")] }];
+}
+function noteRows(note) {
+  const L = LAY[note.cols], cols = colsFor(S, note.cols), amt = AMT_COLS[note.cols], lw = lblW(L.to + 1), skip = !!S.info.skipNil;
+  const out = noteHead(note);
+  if (note.lead && note.cols !== "INV") out.push({ cells: [cell(2, note.lead, { to: L.to, i: true })], h: hFor(note.lead, lw) });
+  const totalRow = () => { if (!note.noTotal) out.push({ cells: [cell(2, note.total || "Total", { to: L.to, b: true }), ...amt.map(c => cell(L.cols[c], num(C[`${note.id}.t.${c}`]), { b: true, bt: 1, bb: 2 }))], h: hFor(note.total, lw) }); };
+  let totalDone = false;
+  for (const sec of note.sections) {
+    if (sec.memo && !totalDone) { totalRow(); totalDone = true; }
+    const rows = rowsOf(note, sec).map(row => {
+      if (row.h) return { row };
+      const zero = amt.every(c => Math.abs(C[`${note.id}.${sec.id}.${row.k}.${c}`] || 0) < 1e-9) && cols.filter(c => c.text).every(c => !getV(note.id, sec.id + "." + row.k, c.k));
+      return { row, zero };
+    });
+    rows.forEach((x, i) => { if (x.row.h) { let j = i + 1, any = false; while (j < rows.length && !rows[j].row.h) { if (!rows[j].zero) any = true; j++; } x.zero = !any; } });
+    const keep = rows.filter(x => !skip || !x.zero);
+    if (skip && !keep.length && amt.every(c => Math.abs(C[`${note.id}.s.${sec.id}.${c}`] || 0) < 1e-9)) continue;
+    if (sec.title) { out.push({ h: 5 }); out.push({ cells: [cell(2, sec.title, { to: L.to, b: true, u: !sec.memo, i: !!sec.memo })], h: hFor(sec.title, lw) }); }
+    for (const { row } of keep) {
+      if (row.h) { out.push({ cells: [cell(1, row.tag || "", { al: "center" }), cell(2, row.h, { to: L.to, b: true })], h: hFor(row.h, lw) }); continue; }
+      const label = row.label || "Others (specify nature)";
+      const cells = [cell(1, row.tag || "", { al: "center" }), cell(2, label, { to: L.to, ind: row.indent ? 1 : 0 })];
+      for (const c of cols) {
+        const ci = L.cols[c.k];
+        if (row.na?.includes(c.k)) cells.push(cell(ci, "NA", { al: "center" }));
+        else if (c.text) cells.push(cell(ci, String(getV(note.id, sec.id + "." + row.k, c.k) || ""), { al: "right" }));
+        else cells.push(cell(ci, num(C[`${note.id}.${sec.id}.${row.k}.${c.k}`])));
+      }
+      out.push({ cells, h: hFor(label, lw) });
+    }
+    if (!sec.noSub && !sec.memo) out.push({ cells: [cell(2, sec.total ?? "Total", { to: L.to, b: true }), ...amt.map(c => cell(L.cols[c], num(C[`${note.id}.s.${sec.id}.${c}`]), { b: true, bt: 1, bb: 1 }))], h: hFor(sec.total, lw) });
+  }
+  if (!totalDone) totalRow();
+  if (note.parties && S.parties[note.parties].length) out.push({ cells: [cell(2, `Refer party-wise details in the sheet "${PARTY[note.parties].sheet}".`, { to: L.to, i: true })] });
+  if (S.text[note.id]) {
+    out.push({ h: 5 });
+    if (note.footLabel) out.push({ cells: [cell(2, note.footLabel.replace(/^./, c => c.toUpperCase()).replace(/ b/, " B"), { to: L.to, b: true, u: true })] });
+    out.push(...footRows(S.text[note.id], L.to));
+  }
+  out.push({ h: 5 });
+  return framed(out, { l: L.l, r: [7] });
+}
+function footRows(text, to = 7) { return String(text).split("\n").filter(Boolean).map(p => ({ cells: [cell(2, p, { to, i: true })], h: hFor(p, lblW(to + 1) * 0.85) })); }
+function textNote(no, title, text) {
+  const rows = [{ cells: [cell(1, no, { b: true, al: "center" }), cell(2, title, { to: 7, b: true })], h: 16 }];
+  for (const line of String(text || "").split("\n")) {
+    if (!line.trim()) { rows.push({ h: 5 }); continue; }
+    const head = /^\s*\d+(\.\d+)+\s/.test(line) && line.length < 80;
+    rows.push({ cells: [cell(2, line, { to: 7, b: head })], h: hFor(line, TXT_W) });
+  }
+  rows.push({ h: 5 });
+  return framed(rows, { l: [1, 2], r: [7] });
+}
+// Notes 3 and 11 sit in the Notes sheet as summaries; the full schedules get their own sheets
+function refNote(no, title, ref, lines) {
+  const d = dates(S);
+  const rows = [noteTitle(no, title, [hd(6, d.cy), hd(7, d.py)], 5)];
+  for (const [l, cy, py, strong] of lines) rows.push({ cells: [cell(2, l, { to: 5, b: !!strong }), cell(6, num(cy), { b: !!strong, bt: strong ? 1 : 0, bb: strong ? 2 : 0 }), cell(7, num(py), { b: !!strong, bt: strong ? 1 : 0, bb: strong ? 2 : 0 })] });
+  rows.push({ cells: [cell(2, ref, { to: 5, i: true })] });
+  rows.push({ h: 5 });
+  return framed(rows, { l: [1, 2, 6, 7], r: [7] });
+}
+function schedSheet(wb, name, widths, orient) {
+  const X = mkSheet(wb, name, widths, { orient, avail: orient === "landscape" ? 470 : 760,
+    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } });
+  const n = widths.length, d = dates(S);
+  X.row({ cells: [cell(1, S.info.name, { to: n, b: true, sz: 11, al: "center" })], h: 16 });
+  X.row({ cells: [cell(1, `Notes forming part of the Financial Statements for the year ended ${d.cy}`, { to: n, b: true, al: "center" })], h: 15 });
+  X.row({ h: 8 });
+  return X;
+}
+function fyDates() {
+  const t = new Date((S.info.fyEnd || "2026-03-31") + "T00:00:00"), st = new Date(t);
+  st.setFullYear(t.getFullYear() - 1); st.setDate(st.getDate() + 1);
+  const f = x => `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}/${x.getFullYear()}`;
+  return { start: f(st), end: f(t) };
+}
+// Capital account: one row per partner, Total, then the previous year in one line
+function xlCapital(wb) {
+  const ow = S.info.ownerWord || "Partner";
+  const X = schedSheet(wb, "Capital Account", [5, 28, 10, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5], "landscape");
+  X.row({ cells: [cell(1, "Note - " + NN("n3"), { to: 3, b: true, u: true }), cell(8, `(Amount in ${S.info.unit})`, { to: 10, b: true, al: "right" })] });
+  X.row({ cells: [cell(1, `${ow}s' Capital Account`, { to: 6, b: true })] });
+  X.body = X.r;
+  const H = ["Sr. No.", `Name of ${ow}`, "Share in Profit/Loss", "Opening Balance", "Addition During the year", "Withdrawal during the year", "Interest on Capital", `${ow}s Remuneration`, "Profit/Loss", "Closing Balance"];
+  const all = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  X.row({ h: 44, frame: { l: all, r: [10] }, top: true, bottom: true, cells: H.map((t, i) => cell(i + 1, t, { b: true, al: "center", va: "middle" })) });
+  S.partners.forEach((p, i) => {
+    X.row({ frame: { l: all, r: [10] }, h: Math.max(16, hFor(p.name, 27)), cells: [cell(1, i + 1, { al: "center", fmt: "0" }), cell(2, p.name || ""), cell(3, num(p.share) / 100, { fmt: "0.00%" }),
+      ...["open", "intro", "wd", "int", "rem"].map((f, j) => cell(4 + j, num(p.cy[f]))), cell(9, num(C[`p.${p.id}.share.cy`])), cell(10, num(C[`p.${p.id}.close.cy`]))] });
+  });
+  const K = ["open", "intro", "wd", "int", "rem", "share", "close"];
+  X.row({ frame: { l: all, r: [10] }, top: true, bottom: true, cells: [cell(1, "Total", { to: 2, b: true, al: "center" }), cell(3, num(C["p.shareT.cy"]) / 100, { b: true, fmt: "0.00%" }),
+    ...K.map((f, j) => cell(4 + j, num(C[`p.T.${f}.cy`]), { b: true }))] });
+  X.row({ frame: { l: [1, 3, 4, 5, 6, 7, 8, 9, 10], r: [10] }, bottom: true, cells: [cell(1, "Previous Year", { to: 2, al: "center" }),
+    ...K.map((f, j) => cell(4 + j, num(C[`p.T.${f}.py`])))] });
+  if (S.text.n3) { X.row({ h: 8 }); String(S.text.n3).split("\n").filter(Boolean).forEach(t => X.row({ cells: [cell(1, t, { to: 10, i: true })], h: hFor(t, 140) })); }
+}
+// Fixed assets: Income-tax style W.D.V. schedule with a previous-year line
+function xlFixedAssets(wb) {
+  const fy = fyDates(), skip = !!S.info.skipNil;
+  const X = schedSheet(wb, "Fixed Assets", [17.5, 7, 11.5, 10.5, 10, 11.5, 12.5, 11.5], "portrait");
+  X.row({ cells: [cell(1, "Note - " + NN("n11"), { b: true, u: true }), cell(6, `(Amount in ${S.info.unit})`, { to: 8, b: true, al: "right" })] });
+  X.row({ cells: [cell(1, "Fixed Assets", { to: 3, b: true })] });
+  X.body = X.r;
+  const all = [1, 2, 3, 4, 5, 6, 7, 8], fr = { l: all, r: [8] };
+  X.row({ frame: { l: [1, 2, 3, 7, 8], r: [8] }, top: true, cells: [cell(1, "Particulars", { b: true, al: "center" }), cell(2, "% of", { b: true, al: "center", va: "bottom" }),
+    cell(3, "Gross Block", { to: 6, b: true, al: "center", bb: 1 }), cell(7, "Depreciation", { b: true, al: "center", bb: 1 }), cell(8, "Net Block", { b: true, al: "center", bb: 1 })] });
+  X.row({ h: 42, frame: fr, bottom: true, cells: [cell(2, "Deprn.", { b: true, al: "center" }), cell(3, `Opg. Bal. ${fy.start}`, { b: true, al: "center" }), cell(4, "Addition during the year", { b: true, al: "center" }),
+    cell(5, "Sale/adj. during the year", { b: true, al: "center" }), cell(6, `Clg. Bal. ${fy.end}`, { b: true, al: "center" }), cell(7, "Provided during the year", { b: true, al: "center" }), cell(8, `W. D. V. as on ${fy.end}`, { b: true, al: "center" })] });
+  const list = S.fa.assets.filter(a => FA_F.some(f => num(a[f])) || (!skip && a.name));
+  const both = list.some(a => a.kind === "i") && list.some(a => a.kind !== "i");
+  const groups = both ? [["Tangible assets", list.filter(a => a.kind !== "i")], ["Intangible assets", list.filter(a => a.kind === "i")]] : [["", list]];
+  const KS = ["open", "add", "sale", "close", "dep", "wdv"];
+  for (const [g, items] of groups) {
+    if (g) X.row({ frame: fr, cells: [cell(1, g, { b: true, u: true })] });
+    for (const a of items) X.row({ frame: fr, h: Math.max(16, hFor(a.name, 21)), cells: [cell(1, a.name || ""), cell(2, num(a.rate), { fmt: "General", al: "center" }),
+      ...KS.map((k, j) => cell(3 + j, num(C[`fa.${a.id}.${k}`])))] });
+  }
+  X.row({ frame: fr, top: true, bottom: true, cells: [cell(1, "Total", { b: true, al: "center" }), ...KS.map((k, j) => cell(3 + j, num(C["fa.T." + k]), { b: true }))] });
+  X.row({ frame: { l: [1, 3, 4, 5, 6, 7, 8], r: [8] }, bottom: true, cells: [cell(1, "Previous Year", { to: 2, al: "center" }), ...KS.map((k, j) => cell(3 + j, num(C["fa.py." + k])))] });
+  X.row({ h: 8 });
+  const note = "Depreciation is provided on the written down value method at the rates prescribed under the Income-tax Act, 1961. Additions put to use for less than 180 days during the year are depreciated at half the rate.";
+  X.row({ cells: [cell(1, note, { to: 8, i: true })], h: hFor(note, 95) });
+  const wip = ["cwip", "iaud"].filter(w => !skip || ["open", "add_cy", "cap_cy", "add_py", "cap_py"].some(f => num(S[w][f])));
+  if (wip.length) {
+    const d = dates(S), wf = { l: [1, 7, 8], r: [8] };
+    X.row({ h: 10 });
+    X.row({ h: 28, frame: wf, top: true, bottom: true, cells: [cell(1, "Particulars", { to: 6, b: true, va: "middle" }), cell(7, d.cy, { b: true, al: "center", va: "middle" }), cell(8, d.py, { b: true, al: "center", va: "middle" })] });
+    for (const w of wip) {
+      X.row({ frame: wf, cells: [cell(1, w === "cwip" ? "Capital work-in-progress" : "Intangible assets under development", { to: 6, b: true, u: true })] });
+      for (const [l, a, b] of [["Opening balance", C[w + ".open_cy"], C[w + ".open_py"]], ["Add: Additions during the year", S[w].add_cy, S[w].add_py], ["Less: Capitalised during the year", S[w].cap_cy, S[w].cap_py]])
+        X.row({ frame: wf, cells: [cell(1, l, { to: 6, ind: 1 }), cell(7, num(a)), cell(8, num(b))] });
+      X.row({ frame: wf, cells: [cell(1, "Closing balance", { to: 6, b: true, ind: 1 }), cell(7, num(C[w + ".close_cy"]), { b: true, bt: 1, bb: 2 }), cell(8, num(C[w + ".close_py"]), { b: true, bt: 1, bb: 2 })] });
+    }
+    X.row({ frame: wf, bottom: true, h: 5 });
+  }
+  if (S.text.n11) { X.row({ h: 8 }); String(S.text.n11).split("\n").filter(Boolean).forEach(t => X.row({ cells: [cell(1, t, { to: 8, i: true })], h: hFor(t, 95) })); }
+}
+// Party-wise debtors / creditors: one line per party, grouped as entered, with a total
+function xlParties(wb, kind) {
+  const list = S.parties[kind]; if (!list.length) return;
+  const deb = kind === "debtors", d = dates(S);
+  const X = schedSheet(wb, PARTY[kind].sheet, deb ? [5, 34, 17, 15, 12.5, 12.5] : [5, 38, 18, 9, 12.5, 12.5], "portrait");
+  X.row({ cells: [cell(1, "Note - " + NN(PARTY[kind].note), { to: 2, b: true, u: true }), cell(4, `(Amount in ${S.info.unit})`, { to: 6, b: true, al: "right" })] });
+  X.row({ cells: [cell(1, deb ? "Trade Receivables – party-wise details" : "Trade Payables – party-wise details", { to: 6, b: true })] });
+  X.body = X.r;
+  const all = [1, 2, 3, 4, 5, 6], fr = { l: all, r: [6] };
+  X.row({ h: 28, frame: fr, top: true, bottom: true, cells: ["Sr. No.", "Name of Party", "Group", deb ? "Outstanding for" : "MSME", "Amount " + d.cy, "Amount " + d.py].map((t, i) => cell(i + 1, t, { b: true, al: "center", va: "middle" })) });
+  // keep parties of one group together, in the order the groups first appear
+  const order = [...new Set(list.map(p => p.grp || ""))];
+  const sorted = order.flatMap(g => list.filter(p => (p.grp || "") === g));
+  const ageTxt = p => (p.age === "gt6" ? "> 6 months" : "< 6 months") + (p.st === "doubt" ? " (doubtful)" : p.st === "sec" ? " (secured)" : "");
+  sorted.forEach((p, i) => X.row({ frame: fr, h: Math.max(RH, hFor(p.name, 34), hFor(p.grp, 17)), cells: [cell(1, i + 1, { al: "center", fmt: "0" }), cell(2, p.name || ""), cell(3, p.grp || ""),
+    cell(4, deb ? ageTxt(p) : (p.msme === "yes" ? "Yes" : "No"), { al: "center" }), cell(5, num(p.cy)), cell(6, num(p.py))] }));
+  X.row({ frame: fr, top: true, bottom: true, cells: [cell(1, "Total", { to: 4, b: true, al: "center" }), cell(5, num(C[`${kind}.T.cy`]), { b: true }), cell(6, num(C[`${kind}.T.py`]), { b: true })] });
+}
+function xlNotes(wb) {
+  const d = dates(S);
+  const X = mkSheet(wb, "Notes", NW, { orient: "portrait", avail: 705, titles: "1:3",
+    margins: { left: 0.45, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } });
+  X.row({ cells: [cell(1, S.info.name, { to: 7, b: true })], h: 15 });
+  X.row({ cells: [cell(1, `Notes forming part of the Financial Statements for the year ended ${d.cy}`, { to: 7, b: true })], h: 15 });
+  X.row({ cells: [cell(5, `(Amount in ${S.info.unit})`, { to: 7, b: true, al: "right" })] });
+  X.body = X.r;
+  X.block(textNote("1", "Brief about the entity", S.info.about)); X.gap();
+  textNote("2", "Significant Accounting Policies", S.info.policies).forEach(r => X.row(r)); X.gap();
+  const ow = S.info.ownerWord || "Partner", fa = k => C[`bs.${k}.cy`], fp = k => C[`bs.${k}.py`];
+  for (const id of NOTE_ORDER) {
+    if (id === "n3") X.block(refNote(NN(id), `${ow}s' Capital Account`, `Refer ${ow.toLowerCase()}-wise schedule in the sheet "Capital Account".`, [
+      ...S.partners.map(p => [p.name || ow, C[`p.${p.id}.close.cy`], C[`p.${p.id}.close.py`]]), ["Total", C["p.T.close.cy"], C["p.T.close.py"], 1]]));
+    else if (id === "n11") X.block(refNote(NN(id), "Fixed Assets", `Refer block-wise schedule in the sheet "Fixed Assets".`, [
+      ["Property, plant and equipment (W.D.V.)", fa("ppe"), fp("ppe")], ["Intangible assets (W.D.V.)", fa("intang"), fp("intang")],
+      ["Capital work-in-progress", fa("cwip"), fp("cwip")], ["Intangible assets under development", fa("iaud"), fp("iaud")],
+      ["Total", fa("ppe") + fa("intang") + fa("cwip") + fa("iaud"), fp("ppe") + fp("intang") + fp("cwip") + fp("iaud"), 1]]));
+    else X.block(noteRows(NOTE_BY[id]));
+    X.gap();
+  }
+  X.row({ h: 12 });
+  X.block(sigRows(2, 6, 7));
+}
+
+$("#xlsBtn").addEventListener("click", async () => {
+  if (!window.ExcelJS) { toast("The Excel library did not load. Check your connection and reload the page."); return; }
+  compute();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "NCE Statement Builder";
+  buildWorkbook(wb);
+  const buf = await wb.xlsx.writeBuffer();
+  await offerFile(safeName() + " - Financial Statements.xlsx", new Blob([buf]));
+});
+
+/* ---------------- PDF export: the Excel layout drawn as A4 HTML pages, then printed ---------------- */
+// HSheet takes the same row specs as XSheet, so the PDF matches the workbook page for page
+class HSheet {
+  constructor(wb, name, widths, opt) {
+    this.W = widths; this.N = widths.length; this.avail = opt.avail; this.orient = opt.orient;
+    this.titleRows = opt.titles ? +String(opt.titles).split(":")[1] : 0;
+    this.r = 0; this.used = 0; this.body = 0; this.titles = []; this.pages = [[]];
+    wb.sheets.push(this);
+  }
+  pageBreak() { if (this.r > this.body) { this.pages.push([...this.titles]); this.used = 0; } }
+  row(spec) {
+    const h = spec.h || RH;
+    if (this.used + h > this.avail) this.pageBreak();
+    this.r++;
+    const cells = Array.from({ length: this.N }, () => ({ html: "", span: 1, st: [], b: {} }));
+    const skip = new Set();
+    for (const c of spec.cells || []) {
+      const last = c.to || c.c, x = cells[c.c - 1];
+      for (let k = c.c + 1; k <= last; k++) skip.add(k);
+      x.span = last - c.c + 1;
+      x.html = hval(c);
+      const isNum = typeof c.v === "number";
+      x.st.push(`text-align:${c.al || (isNum ? "right" : "left")}`, `vertical-align:${c.va === "middle" ? "middle" : c.va === "bottom" ? "bottom" : "top"}`);
+      if (c.b) x.st.push("font-weight:700"); if (c.i) x.st.push("font-style:italic"); if (c.u) x.st.push("text-decoration:underline");
+      if (c.sz) x.st.push(`font-size:${c.sz}pt`); if (c.ind) x.st.push(`padding-left:${4 + c.ind * 9}pt`);
+      if (c.box) { x.b.top = x.b.bottom = x.b.left = x.b.right = "solid"; }
+      if (c.bt) x.b.top = "solid";
+      if (c.bb) x.b.bottom = c.bb === 2 ? "double" : "solid";
+      x.last = last;
+    }
+    if (spec.frame) {
+      const [a, b] = spec.frame.span || [1, this.N];
+      const owner = k => { for (let j = k; j >= 1; j--) if (!skip.has(j)) return j; return k; };
+      for (const k of spec.frame.l || []) { const o = owner(k); if (o === k) cells[k - 1].b.left = "solid"; }
+      for (const k of spec.frame.r || []) { const o = owner(k); const x = cells[o - 1]; if ((x.last || o) === k) x.b.right = "solid"; }
+      for (let k = a; k <= b; k++) if (!skip.has(k)) { if (spec.top) cells[k - 1].b.top ||= "solid"; if (spec.bottom) cells[k - 1].b.bottom ||= "solid"; }
+    }
+    const tds = cells.map((x, i) => {
+      if (skip.has(i + 1)) return "";
+      const bs = ["top", "bottom", "left", "right"].filter(s => x.b[s]).map(s => `border-${s}:${x.b[s] === "double" ? "2.5pt double" : "0.75pt solid"} #000`);
+      return `<td${x.span > 1 ? ` colspan="${x.span}"` : ""} style="${[...x.st, ...bs].join(";")}">${x.html}</td>`;
+    }).join("");
+    const tr = `<tr style="height:${h}pt">${tds}</tr>`;
+    this.pages[this.pages.length - 1].push(tr);
+    if (this.r <= this.titleRows) this.titles.push(tr);
+    this.used += h;
+  }
+  block(rows) {
+    const tot = rows.reduce((a, r) => a + (r.h || RH), 0);
+    if (this.used > 0 && this.used + tot > this.avail && (tot <= this.avail || this.avail - this.used < this.avail * 0.4)) this.pageBreak();
+    rows.forEach(r => this.row(r));
+  }
+  gap(h = 10) { if (this.used > 0 && this.used + h <= this.avail) this.row({ h }); }
+  html() {
+    const tot = this.W.reduce((a, b) => a + b, 0);
+    const cols = `<colgroup>${this.W.map(w => `<col style="width:${(w / tot * 100).toFixed(3)}%">`).join("")}</colgroup>`;
+    return this.pages.filter(p => p.length).map(p => `<section class="pp ${this.orient}"><table>${cols}${p.join("")}</table></section>`).join("");
+  }
+}
+function hval(c) {
+  const v = c.v;
+  if (v === undefined || v === null || v === "") return "";
+  if (typeof v !== "number") return esc(v).replace(/\n/g, "<br>");
+  if (c.fmt === '0.00"%"') return v.toFixed(2) + "%";
+  if (c.fmt === "0.00%") return (v * 100).toFixed(2) + "%";
+  if (c.fmt === "0") return String(Math.round(v));
+  if (c.fmt === "General" || c.fmt === "0.##") return String(+v.toFixed(2));
+  return fmt(v);
+}
+// both writers are built through this, so every layout function works for Excel and for PDF
+function mkSheet(wb, name, widths, opt) { return wb.html ? new HSheet(wb, name, widths, opt) : new XSheet(wb, name, widths, opt); }
+function buildWorkbook(wb) {
+  xlStatement(wb, "bs");
+  xlStatement(wb, "pl");
+  xlNotes(wb);
+  xlCapital(wb);
+  xlFixedAssets(wb);
+  xlParties(wb, "debtors");
+  xlParties(wb, "creditors");
+}
+$("#pdfBtn").addEventListener("click", () => {
+  compute();
+  const wb = { html: true, sheets: [] };
+  buildWorkbook(wb);
+  const box = $("#printArea");
+  box.innerHTML = wb.sheets.map(s => s.html()).join("");
+  const prev = document.title;
+  document.title = safeName() + " - Financial Statements";
+  setTimeout(() => {
+    try { window.print(); } catch { toast("Printing is blocked here. Open the website in Safari or Chrome."); }
+    document.title = prev;
+  }, 50);
+});
+
+/* ---------------- sample data ---------------- */
+function sampleState() {
+  const s = blankState("Shree Ganesh Traders (example)");
+  s.isSample = true;
+  Object.assign(s.info, { place: "Ahmedabad", date: "", caFirm: "Mehta & Associates", frn: "123456W", caName: "CA R. Mehta", mno: "045678",
+    about: "Shree Ganesh Traders is a partnership firm registered under the Indian Partnership Act, 1932, engaged in wholesale trading of electrical goods. Partners: Amit Shah (60%) and Neha Patel (40%)." });
+  s.partners = [
+    { id: "pa", name: "Amit Shah", share: 60, pshare: 60, cy: { open: 0, intro: 200000, rem: 300000, int: 144000, wd: 450000 }, py: { open: 1000000, intro: 0, rem: 240000, int: 120000, wd: 350000 } },
+    { id: "pb", name: "Neha Patel", share: 40, pshare: 40, cy: { open: 0, intro: 0, rem: 200000, int: 96000, wd: 300000 }, py: { open: 700000, intro: 0, rem: 180000, int: 84000, wd: 250000 } },
+  ];
+  const V = (n, rk, cy, py) => { setVs(s, n, rk, "cy", cy); setVs(s, n, rk, "py", py); };
+  V("n19", "g.prod", 6250000, 5550000); V("n19", "g.serv", 350000, 300000);
+  V("n20", "a.int", 42000, 36000); V("n20", "a.oth", 8000, 0);
+  V("n21", "sit.p1", 3950000, 3550000);
+  V("n21", "chg.o_sit", 640000, 580000); V("n21", "chg.c_sit", 720000, 640000);
+  V("n22", "a.sal", 420000, 380000); V("n22", "a.pf", 38000, 34000); V("n22", "a.welfare", 22000, 18000);
+  V("n23", "a.bank", 118000, 132000); V("n23", "a.obc", 9000, 8000);
+  V("n25", "a.rent", 300000, 300000); V("n25", "a.power", 64000, 58000); V("n25", "a.ins", 18000, 16000); V("n25", "a.travel", 52000, 47000);
+  V("n25", "a.audit", 25000, 25000); V("n25", "a.print", 12000, 11000); V("n25", "a.comm", 15000, 14000); V("n25", "a.legal", 40000, 30000); V("n25", "a.misc", 14000, 12000);
+  V("tx", "tax.cur", 215000, 150000);
+  s.extra["n5a.sec"] = [{ id: "l1", label: "HDFC Bank – Term loan" }];
+  s.extra["n5b.sec"] = [{ id: "l2", label: "HDFC Bank – Cash credit" }];
+  V("n5a", "sec.x_l1", 600000, 800000); V("n5b", "sec.x_l2", 450000, 520000); V("n5b", "cm.cm", 200000, 200000);
+  s.text.n5a = "The term loan from HDFC Bank is secured by hypothecation of the firm's vehicles and personal guarantee of the partners. It carries interest at 9.25% p.a. and is repayable in 60 monthly instalments, the last falling due in March 2029.";
+  s.text.n5b = "The cash credit from HDFC Bank is secured by hypothecation of stock and book debts and carries interest at 9.75% p.a. It is repayable on demand.";
+  s.parties.creditors = [
+    { id: "c1", name: "Havells India Ltd", grp: "Manufacturers", msme: "no", cy: 300000, py: 270000 },
+    { id: "c2", name: "Polycab India Ltd", grp: "Manufacturers", msme: "no", cy: 220000, py: 200000 },
+    { id: "c3", name: "Jyoti Cables", grp: "Local suppliers", msme: "yes", cy: 180000, py: 150000 }];
+  V("n10", "a.gst", 46000, 38000); V("n10", "a.tds", 9000, 8000); V("n10", "a.oth", 30000, 25000);
+  V("n8", "a.tax", { st_cy: 65000, st_py: 40000 });
+  V("n13", "unsec.sd", { lt_cy: 100000, lt_py: 100000 }); V("n13", "unsec.prepaid", { st_cy: 12000, st_py: 10000 }); 
+  V("n15", "a.sit", 720000, 640000);
+  s.parties.debtors = [
+    { id: "d1", name: "Patel Electricals", grp: "Retail dealers", age: "lt6", st: "unsec", cy: 420000, py: 380000 },
+    { id: "d2", name: "Shiv Shakti Traders", grp: "Retail dealers", age: "lt6", st: "unsec", cy: 310000, py: 260000 },
+    { id: "d3", name: "Om Projects Pvt Ltd", grp: "Contractors", age: "lt6", st: "unsec", cy: 250000, py: 220000 },
+    { id: "d4", name: "Ganesh Electric Works", grp: "Contractors", age: "gt6", st: "unsec", cy: 60000, py: 45000 }];
+  V("n17", "cce.cur", 0, 0); V("n17", "cce.cash", 38000, 31000); V("n17", "obb.fd12", 300000, 250000);
+  V("n18", "a.ind", 9000, 7000);
+  const fa = { "Furniture & Fixtures": { open: 170000 }, "Office Equipment": { open: 126000, add1: 25000 }, "Motor Car": { open: 425000 },
+    "Computer & Printer": { open: 18000, add2: 30000 }, "Computer Software": { open: 24000 } };
+  s.fa.assets.forEach(a => Object.assign(a, fa[a.name] || {}));
+  s.fa.py = { open: 900000, add: 40000, sale: 0, dep: 177000 };
+  return s;
+}
+function setVs(s, n, rk, c, v) {
+  if (typeof c === "object") { for (const k in c) setVs(s, n, rk, k, c[k]); return; }
+  if (v && typeof v === "object") { for (const k in v) setVs(s, n, rk, k, v[k]); return; }
+  ((s.vals[n] ||= {})[rk] ||= {})[c] = v;
+}
+// make the example tally: carry previous-year closing capital forward and balance through the bank account
+function balanceSample(s) {
+  const keep = S; S = s; compute();
+  s.partners.forEach(p => p.cy.open = Math.round(C[`p.${p.id}.close.py`]));
+  for (const y of ["py", "cy"]) { compute(); setVs(s, "n17", "cce.cur", y, num(getV("n17", "cce.cur", y)) + Math.round(C[`bs.diff.${y}`])); }
+  compute(); S = keep; return s;
+}
+function normalize(s) {
+  const b = blankState();
+  s.info = { ...b.info, ...s.info }; s.vals ||= {}; s.extra ||= {}; s.text ||= {}; s.cwip ||= {}; s.iaud ||= {};
+  s.parties ||= {}; s.parties.debtors ||= []; s.parties.creditors ||= [];
+  migrateBorrowings(s); migrateFixedAssets(s, b);
+  s.partners ||= []; s.partners.forEach(p => { p.cy ||= {}; p.py ||= {}; }); if (s.allocate === undefined) s.allocate = true;
+  return s;
+}
+
+// earlier versions kept borrowings in one ICAI-style grid; split them into lender-wise lines
+function migrateBorrowings(s) {
+  const old = s.vals.n5; if (!old) return;
+  const L = { tl_bank: "Term loans from banks", tl_oth: "Term loans from other parties", od_bank: "Loans repayable on demand from banks", od_oth: "Loans repayable on demand from other parties",
+    dpl: "Deferred payment liabilities", rp: "Loans and advances from related parties", fl: "Finance lease obligations", oth: "Other loans and advances" };
+  for (const sec of ["sec", "unsec"]) {
+    const ex = Object.fromEntries((s.extra["n5." + sec] || []).map(e => ["x_" + e.id, e.label]));
+    for (const [rk, v] of Object.entries(old)) {
+      const [sc, k] = rk.split("."); if (sc !== sec) continue;
+      const label = L[k] || ex[k] || "Loan";
+      for (const [note, a, b] of [["n5a", "lt_cy", "lt_py"], ["n5b", "st_cy", "st_py"]]) {
+        if (!num(v[a]) && !num(v[b])) continue;
+        const id = uid(); (s.extra[note + "." + sec] ||= []).push({ id, label });
+        ((s.vals[note] ||= {})[sec + ".x_" + id] = { cy: num(v[a]), py: num(v[b]) });
+      }
+    }
+    delete s.extra["n5." + sec];
+  }
+  if (s.text.n5) { s.text.n5a = s.text.n5; delete s.text.n5; }
+  delete s.vals.n5;
+}
+// earlier versions kept a gross-block grid; carry each class over as a W.D.V. block (rates to be filled in)
+function migrateFixedAssets(s, b) {
+  if (s.fa) { s.fa.py ||= {}; s.fa.assets ||= []; return; }
+  if (!s.ppe) { s.fa = b.fa; return; }
+  const assets = [], py = { open: 0, add: 0, sale: 0, dep: 0 };
+  for (const [kind, k] of [["tangible", "t"], ["intangible", "i"]]) for (const c of s.ppe[kind] || []) {
+    const v = f => num(s.ppeV?.[c.id]?.[f]);
+    const openWdv = (v("g_open") + v("g_add_py") - v("g_ded_py")) - (v("d_open") + v("d_chg_py") - v("d_ded_py"));
+    py.open += v("g_open") - v("d_open"); py.add += v("g_add_py"); py.sale += v("g_ded_py") - v("d_ded_py"); py.dep += v("d_chg_py");
+    if (openWdv || v("g_add_cy") || v("g_ded_cy")) assets.push({ id: uid(), name: c.name, kind: k, rate: 0, open: openWdv, add1: v("g_add_cy"), sale: v("g_ded_cy") - v("d_ded_cy") });
+  }
+  s.fa = { assets: assets.length ? assets : b.fa.assets, py };
+  delete s.ppe; delete s.ppeV;
+}
+
+/* ---------------- boot ---------------- */
+function boot() {
+  const saved = lsLoad();
+  if (saved?.ents && Object.keys(saved.ents).length) {
+    ENT = Object.fromEntries(Object.entries(saved.ents).map(([k, v]) => [k, normalize(v)]));
+    S = ENT[saved.cur] || Object.values(ENT)[0];
+  } else { const s = balanceSample(sampleState()); ENT = { [s.id]: s }; S = s; }
+  route = location.hash.slice(1) || "info";
+  render();
+  setStatus("Saved on this device");
+  connectDb();
+}
+async function connectDb() {
+  if (!window.claude?.use) { dbReady = true; setStatus("Saved in this browser"); return; }
+  try {
+    const [d, u] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    dbReady = true;
+    if (!d || !u) { setStatus("Saved in this browser"); return; }
+    const id = await u.id();
+    if (!id) { setStatus("Saved in this browser"); return; }
+    db = d; dbUid = id;
+    const snap = await db.collection("data/users/" + id).get();
+    let changed = false;
+    for (const doc of snap.docs) {
+      const row = doc.data(); if (!row?.data) continue;
+      let st; try { st = normalize(JSON.parse(row.data)); } catch { continue; }
+      if (!ENT[st.id] || (ENT[st.id].updatedAt || 0) < (st.updatedAt || 0)) { ENT[st.id] = st; changed = true; }
+    }
+    // drop the untouched example if the account already has real entities
+    if (snap.docs.length) for (const e of Object.values(ENT)) if (e.isSample && Object.keys(ENT).length > 1) { delete ENT[e.id]; changed = true; }
+    // push local entities the account does not have yet
+    const have = new Set(snap.docs.map(x => x.id));
+    for (const e of Object.values(ENT)) if (!have.has(e.id) && !e.isSample)
+      await db.collection("data/users/" + id).doc(e.id).set({ name: e.info.name, updatedAt: e.updatedAt, data: JSON.stringify(e) });
+    if (changed) { if (!ENT[S.id]) S = Object.values(ENT)[0]; lsSave(); render(); }
+    setStatus("Saved to your account");
+  } catch (e) { setStatus("Saved in this browser"); }
+}
+boot();
+</script>
