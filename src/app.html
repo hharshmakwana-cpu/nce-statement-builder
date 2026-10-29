@@ -1,7 +1,7 @@
 <title>NCE Statement Builder</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400&family=Carlito:ital,wght@0,400;0,700;1,400&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* Layout: ledger workbook. Fixed left index of notes, working sheet on the right; statements set like a printed schedule. */
@@ -202,17 +202,32 @@ table.st .link { color: var(--paper-ink); }
 .confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: var(--bad-soft); border-radius: 8px; }
 
 #printArea { display: none; }
+.fsdoc table, #printArea table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.fsdoc td, #printArea td { padding: 0.6pt 3pt; line-height: 1.2; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.fsdoc { background: #fff; color: #000; font-family: Carlito, Calibri, "Segoe UI", Arial, sans-serif; font-size: 10pt; padding: 22px 26px; border-radius: 4px; }
 @media print {
-  @page { size: A4 portrait; margin: 10mm 10mm 12mm; }
-  @page land { size: A4 landscape; margin: 10mm 10mm 12mm; }
-  body { background: #fff !important; }
+  @page { size: A4 portrait; margin: 0; }
+  html, body { background: #fff !important; padding: 0 !important; }
   body::before, .top, .app, .toast { display: none !important; }
-  #printArea { display: block; color: #000; font-family: "Trebuchet MS", "Lucida Grande", sans-serif; font-size: 10pt; }
-  #printArea section.pp { break-after: page; }
-  #printArea section.pp:last-child { break-after: auto; }
-  #printArea section.landscape { page: land; }
-  #printArea table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  #printArea td { padding: 0.5pt 3pt; line-height: 1.2; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  #printArea { display: block; color: #000; font-family: Carlito, Calibri, "Segoe UI", Arial, sans-serif; font-size: 10pt; }
+  #printArea section.pp { width: 210mm; padding: 12mm 12mm 0 14mm; box-sizing: border-box; break-after: page; page-break-after: always; }
+  #printArea section.pp:last-child { break-after: auto; page-break-after: auto; }
+  #printArea section.land { height: 297mm; overflow: hidden; }
+  #printArea section.land .rot { width: 273mm; height: 184mm; transform-origin: top left; transform: translate(0, 273mm) rotate(-90deg); }
+  #printArea section.cover { height: 297mm; padding: 14mm; }
+  .cv { height: 100%; box-sizing: border-box; border: 2.4pt double #000; padding: 22mm 18mm 16mm; display: flex; flex-direction: column; font-family: Carlito, Calibri, sans-serif; }
+  .cv-fy { letter-spacing: 0.25em; font-weight: 700; font-size: 10pt; }
+  .cv-name { font-family: "Source Serif 4", Cambria, Georgia, serif; font-weight: 700; font-size: 30pt; line-height: 1.15; margin-top: 10mm; }
+  .cv-rule { width: 16mm; height: 2.2mm; background: #000; margin: 10mm 0 4mm; }
+  .cv-reg { font-size: 11pt; letter-spacing: 0.06em; }
+  .cv-mid { margin-top: auto; }
+  .cv-aud { font-family: "Source Serif 4", Cambria, Georgia, serif; font-style: italic; font-size: 20pt; }
+  .cv-title { font-family: "Source Serif 4", Cambria, Georgia, serif; font-weight: 700; font-size: 30pt; margin-top: 2mm; }
+  .cv-for { font-size: 12pt; margin-top: 5mm; }
+  .cv-foot { margin-top: auto; border-top: 0.8pt solid #000; padding-top: 7mm; }
+  .cv-lab { letter-spacing: 0.25em; font-weight: 700; font-size: 9pt; }
+  .cv-firm { font-family: "Source Serif 4", Cambria, Georgia, serif; font-weight: 700; font-size: 17pt; margin-top: 4mm; }
+  .cv-ca { font-size: 10.5pt; margin-top: 2mm; }
 }
 @media (max-width: 860px) {
   .app { grid-template-columns: minmax(0, 1fr); }
@@ -285,6 +300,7 @@ function dates(S) {
   const cys = new Date(py); cys.setDate(cys.getDate() + 1);
   return { cy: dlabel(cy), py: dlabel(py), pyStart: dlabel(pys), cyStart: dlabel(cys) };
 }
+function unitLabel() { return { "Rs.": "Amount in ₹", "Rs. in thousands": "₹ in '000", "Rs. in lakhs": "₹ in lakhs", "Rs. in crores": "₹ in crores" }[S.info.unit] || S.info.unit; }
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3200); }
 
 /* ---------------- note definitions ---------------- */
@@ -377,28 +393,28 @@ const NOTES = [
       { id: "dtl", title: "Deferred tax liability", total: "Gross deferred tax liability (B)", add: true, rows: [
         r("dep", "Difference between book depreciation and tax depreciation"),
         r("oth", "Others (please specify)") ] },
-      { id: "m", title: "For the deferred tax charge in the Statement of Profit and Loss", memo: true, rows: [
+      { id: "m", title: "For the deferred tax charge in the Statement of Profit and Loss", memo: true, noPrint: true, rows: [
         r("open", "Net deferred tax liability/(asset) at the beginning of the previous year (enter asset as negative)", { na: ["cy"] }),
         r("chg", "Deferred tax charge/(benefit) for the year", { auto: C => ({ cy: C["n6.t.cy"] - C["n6.t.py"], py: C["n6.t.py"] - C["n6.m.open.py"] }) }) ] } ],
     total: "Net deferred tax liability/(asset) (B − A)" },
   { id: "n7", no: "7", title: "Other long-term liabilities", cols: "C2", grp: "bs",
     sections: [{ id: "a", add: true, noSub: true, rows: [r("adv", "Advance from customers", { tag: "(a)" }), r("oth", "Others (please specify)", { tag: "(b)" })] }],
     total: "Total other long-term liabilities" },
-  { id: "n8", no: "8", title: "Provisions", cols: "C4", grp: "bs",
+  ...[["n8a", "Long-term provisions"], ["n8b", "Short-term provisions"]].map(([id, title]) => ({ id, no: "8", title, cols: "C2", grp: "bs",
     sections: [{ id: "a", add: true, noSub: true, rows: [
-      h("Provision for employee benefits", "(a)"),
+      h("Provision for employee benefits"),
       r("grat", "Provision for gratuity", { indent: 1 }), r("leave", "Provision for leave encashment", { indent: 1 }),
-      h("Other provisions", "(b)"),
+      h("Other provisions"),
       r("tax", "Provision for income tax [net of advance tax]", { indent: 1 }),
       r("warr", "Other provisions (e.g. warranties, contingencies – please specify)", { indent: 1 }),
       r("oth", "Others (specify nature)", { indent: 1 }) ] }],
-    total: "Total provisions" },
+    total: "Total" })),
   { id: "n9", no: "9", title: "Trade payables", cols: "C2", grp: "bs", parties: "creditors",
     sections: [
       { id: "a", noSub: true, add: true, rows: [
         r("msme", "Total outstanding dues of micro enterprises and small enterprises", { tag: "(a)", auto: fromList("creditors", "msme") }),
         r("oth", "Total outstanding dues of creditors other than micro enterprises and small enterprises", { tag: "(b)", auto: fromList("creditors", "oth") }) ] },
-      { id: "m", title: "Disclosure relating to suppliers registered under the MSMED Act", memo: true, rows: [
+      { id: "m", title: "Disclosure relating to suppliers registered under the MSMED Act", subTitle: "The details of amounts outstanding to Micro, Small and Medium Enterprises based on available information with the firm is as under:", memo: true, rows: [
         h("(a) Amount remaining unpaid to any supplier at the end of each accounting year"),
         r("prin", "Principal", { indent: 1 }), r("int", "Interest", { indent: 1 }),
         r("b", "(b) Interest paid by the buyer under section 16 of the MSMED Act, 2006, along with amounts paid beyond the appointed day"),
@@ -422,7 +438,7 @@ const NOTES = [
     sections: [
       { id: "tq", title: "Trade investments – Quoted", add: true, rows: [...INV_TRADE, ...INV_OTHER()], total: "Total quoted investments" },
       { id: "tu", title: "Trade investments – Unquoted", add: true, rows: [...INV_TRADE, ...INV_OTHER()], total: "Total unquoted investments" },
-      { id: "m", title: "Aggregate values", memo: true, rows: [
+      { id: "m", title: "Aggregate values", subTitle: "Aggregate value of investments:", memo: true, rows: [
         r("q", "Aggregate amount of quoted investments", { na: INV_NA }), r("mv", "Market value of quoted investments", { na: INV_NA }),
         r("uq", "Aggregate amount of unquoted investments", { na: INV_NA }), r("prov", "Aggregate provision for diminution in value of investments", { na: INV_NA }) ] } ],
     total: "Total non-current investments",
@@ -432,20 +448,20 @@ const NOTES = [
     sections: [
       { id: "q", title: "Quoted", add: true, rows: CUR_INV, total: "Net quoted current investments" },
       { id: "u", title: "Unquoted", add: true, rows: CUR_INV, total: "Net unquoted current investments" },
-      { id: "m", title: "Aggregate values", memo: true, rows: [
+      { id: "m", title: "Aggregate values", subTitle: "Aggregate value of investments:", memo: true, rows: [
         r("q", "Aggregate amount of quoted investments", { na: INV_NA }), r("mv", "Market value of quoted investments", { na: INV_NA }),
         r("uq", "Aggregate amount of unquoted investments", { na: INV_NA }), r("prov", "Aggregate provision for diminution in value of investments", { na: INV_NA }) ] } ],
     total: "Grand total" },
-  { id: "n13", no: "13", title: "Loans and advances", cols: "C4", grp: "bs",
+  ...[["n13a", "Long-term loans and advances"], ["n13b", "Short-term loans and advances"]].map(([id, title]) => ({ id, no: "13", title, cols: "C2", grp: "bs",
     sections: [
-      { id: "sec", title: "A. Secured", add: true, rows: LOANS_ROWS, total: "Total (A)" },
-      { id: "unsec", title: "B. Unsecured", add: true, rows: LOANS_ROWS, total: "Total (B)" } ],
-    total: "Total (A + B)" },
+      { id: "sec", title: "Secured, considered good", add: true, rows: LOANS_ROWS, total: "" },
+      { id: "unsec", title: "Unsecured", add: true, rows: LOANS_ROWS, total: "" } ],
+    total: "Total" })),
   { id: "n14", no: "14", title: "Other non-current assets", cols: "C2", grp: "bs",
     sections: [{ id: "a", add: true, noSub: true, rows: [r("sd", "Security deposits", { tag: "(a)" }), r("prepaid", "Prepaid expenses", { tag: "(b)" }), r("oth", "Others (specify nature)", { tag: "(c)" })] }],
     total: "Total other non-current assets" },
   { id: "n15", no: "15", title: "Inventories", cols: "C2", grp: "bs",
-    lead: "Valued at lower of cost and net realisable value. Show goods in transit under the relevant sub-head.",
+    lead: "[Valued at lower of cost and net realisable value, as taken, valued and certified by the management]", hint: "Show goods in transit under the relevant sub-head.",
     sections: [{ id: "a", add: true, noSub: true, rows: [
       r("rm", "Raw materials", { tag: "(a)" }), r("wip", "Work-in-progress", { tag: "(b)" }), r("fg", "Finished goods", { tag: "(c)" }),
       r("sit", "Stock-in-trade", { tag: "(d)" }), r("stores", "Stores and spares", { tag: "(e)" }), r("tools", "Loose tools", { tag: "(f)" }),
@@ -471,7 +487,7 @@ const NOTES = [
         r("oth", "Others (specify nature)", { tag: "(iv)" }) ] } ],
     total: "Total cash and bank balances (I + II)" },
   { id: "n18", no: "18", title: "Other current assets", cols: "C2", grp: "bs",
-    lead: "All-inclusive heading for current assets that do not fit under any other asset category.",
+    hint: "All-inclusive heading for current assets that do not fit under any other asset category.",
     sections: [{ id: "a", add: true, noSub: true, rows: [
       r("ind", "Interest accrued but not due on deposits", { tag: "(a)" }), r("id", "Interest accrued and due on deposits", { tag: "(b)" }) ] }],
     total: "Total other current assets" },
@@ -488,7 +504,7 @@ const NOTES = [
       r("gain", "Net gain on sale of investments", { tag: "(c)" }), r("oth", "Other non-operating income (please specify)", { tag: "(d)" }) ] }],
     total: "Total other income" },
   { id: "n21", no: "21", title: "Cost of goods sold", cols: "C2", grp: "pl",
-    lead: "Leave unused parts blank. Enter closing inventory as a positive figure; it is deducted automatically.",
+    hint: "Leave unused parts blank. Enter closing inventory as a positive figure; it is deducted automatically.",
     sections: [
       ...[["rm", "A (I). Raw material consumed", "Cost of raw material consumed (I)"],
         ["pm", "A (II). Packing material consumed (if considered part of raw material)", "Cost of packing material consumed (II)"],
@@ -517,7 +533,7 @@ const NOTES = [
       r("fx", "Loss on foreign exchange transactions and translations considered as finance cost (net)", { tag: "(d)" }) ] }],
     total: "Total finance costs" },
   { id: "n24", no: "24", title: "Depreciation and amortisation expense", cols: "C2", grp: "pl",
-    lead: "Filled automatically from the depreciation provided in the fixed assets schedule.",
+    hint: "Filled automatically from the depreciation provided in the fixed assets schedule.",
     sections: [{ id: "a", noSub: true, rows: [
       r("tang", "On property, plant and equipment", { tag: "(a)", auto: C => ({ cy: C["ppe.tangible.dep_cy"], py: C["ppe.tangible.dep_py"] }), src: "n11" }),
       r("intang", "On intangible assets", { tag: "(b)", auto: C => ({ cy: C["ppe.intangible.dep_cy"], py: C["ppe.intangible.dep_py"] }), src: "n11" }) ] }],
@@ -535,7 +551,7 @@ const NOTES = [
     ].map(([k, l], i) => r(k, l, { tag: "(" + "abcdefghijklmnopqrstuvwx"[i] + ")" })) }],
     total: "Total other expenses" },
   { id: "tx", no: "", title: "Tax and other P&L items", cols: "C2", grp: "pl", noTotal: true,
-    lead: "These lines appear on the face of the Statement of Profit and Loss without a separate note. Enter expenses as positive figures and gains as negative.",
+    hint: "These lines appear on the face of the Statement of Profit and Loss without a separate note. Enter expenses as positive figures and gains as negative.",
     sections: [
       { id: "exc", title: "VI. Exceptional items", add: true, total: "Total exceptional items", rows: [r("a", "Exceptional items (specify nature)")] },
       { id: "ext", title: "VIII. Extraordinary items", add: true, total: "Total extraordinary items", rows: [r("a", "Extraordinary items (specify nature)")] },
@@ -548,9 +564,23 @@ const NOTES = [
         r("tax", "XV. Tax expense of discontinuing operations") ] } ] },
 ];
 const NOTE_BY = Object.fromEntries(NOTES.map(n => [n.id, n]));
-const NOTE_ORDER = ["n3", "n4", "n5a", "n6", "n7", "n8", "n5b", "n9", "n10", "n11", "n12a", "n13", "n14", "n12b", "n15", "n16", "n17", "n18",
+const NOTE_ORDER = ["n3", "n4", "n5a", "n6", "n7", "n8a", "n5b", "n9", "n10", "n8b", "n11", "n12a", "n13a", "n14", "n12b", "n15", "n16", "n17", "n13b", "n18",
   "n19", "n20", "n21", "n22", "n23", "n24", "n25"];
-const NOTE_NO = Object.fromEntries(NOTE_ORDER.map((id, i) => [id, String(i + 3)]));
+// numbers run 3, 4, 5… over the notes that print; with nil lines left out, an empty note drops out and the rest close up
+let NOTE_NO = Object.fromEntries(NOTE_ORDER.map((id, i) => [id, String(i + 3)]));
+let NOTE_COUNT = NOTE_ORDER.length;
+function noteNil(id) {
+  if (id === "n3") return !S.partners.length;
+  const z = k => Math.abs(num(C[k])) < 1e-9;
+  if (id === "n11") return ["ppe", "intang", "cwip", "iaud"].every(k => z(`bs.${k}.cy`) && z(`bs.${k}.py`)) && z("fa.T.dep") && z("fa.py.dep");
+  const pre = id + ".";
+  return Object.keys(C).every(k => !k.startsWith(pre) || z(k));
+}
+function numberNotes() {
+  const act = NOTE_ORDER.filter(id => !S.info.skipNil || !noteNil(id));
+  NOTE_NO = Object.fromEntries(act.map((id, i) => [id, String(i + 3)]));
+  NOTE_COUNT = act.length;
+}
 const NN = id => NOTE_NO[id] || "";
 const TITLE_OF = { n3: "Owners' capital account", n11: "Fixed assets" };
 
@@ -572,32 +602,41 @@ const FA_DEFAULT = [["Land & Building", "t", 10], ["Furniture & Fixtures", "t", 
   ["Motor Car", "t", 15], ["Computer & Printer", "t", 40], ["Computer Software", "i", 40]];
 const FA_F = ["open", "add1", "add2", "sale"];
 
-const POLICIES = `2.1 Basis of preparation
+const POLICIES = `[A] Basis of Preparation of Financial Statements
 The financial statements have been prepared under the historical cost convention on the accrual basis of accounting, in accordance with the generally accepted accounting principles in India and the Accounting Standards issued by the Institute of Chartered Accountants of India, as applicable to the entity.
 
-2.2 Use of estimates
-The preparation of financial statements requires management to make estimates and assumptions that affect the reported amounts of assets, liabilities, income and expenses. Differences between actual results and estimates are recognised in the period in which they are known.
+[B] Use of Estimates
+The preparation of the financial statements requires estimates and assumptions to be made that affect the reported amounts of assets and liabilities on the date of the financial statements and the reported amount of revenues and expenses during the reporting period. Differences between actual results and estimates are recognised in the period in which the results are known or materialise.
 
-2.3 Property, plant and equipment and depreciation
-Property, plant and equipment are stated at cost less accumulated depreciation and impairment, if any. Depreciation is provided on the written down value method at the rates prescribed under the Income-tax Act, 1961 / based on the useful lives estimated by management.
+[C] Property, Plant & Equipment
+Property, plant & equipment are stated at cost less depreciation. Cost comprises the purchase price, borrowing cost if capitalisation criteria are met, and directly attributable cost of bringing the asset to its working condition for its intended use.
 
-2.4 Inventories
-Inventories are valued at the lower of cost (on FIFO / weighted average basis) and net realisable value.
+[D] Depreciation
+Depreciation is provided on the written down value method at the rates prescribed under the Income-tax Act, 1961. Additions put to use for less than 180 days during the year are depreciated at half the rate.
 
-2.5 Revenue recognition
-Revenue from sale of goods is recognised when significant risks and rewards of ownership are transferred to the buyer. Revenue from services is recognised as the services are rendered. Revenue is shown net of GST.
+[E] Inventories
+Inventories are valued at the lower of cost and net realisable value. Cost is arrived at on FIFO basis and is exclusive of GST.
 
-2.6 Investments
-Long-term investments are carried at cost less provision for diminution, other than temporary, in value. Current investments are carried at the lower of cost and fair value.
+[F] Revenue Recognition
+Sales are recognised on delivery of goods, which generally coincides with the transfer of ownership, and are stated exclusive of GST. All other income and expenses are accounted for on accrual basis.
 
-2.7 Employee benefits
-Contributions to defined contribution schemes are charged to the Statement of Profit and Loss. Gratuity and leave encashment are provided on the basis of actuarial valuation / as per management estimate.
+[G] Taxes on Income
+Current tax is measured at the amount expected to be paid in accordance with the provisions of the Income-tax Act, 1961. Deferred tax is recognised on timing differences between taxable and accounting income, subject to consideration of prudence.
 
-2.8 Taxes on income
-Current tax is determined as the amount of tax payable for the year. Deferred tax is recognised on timing differences between taxable and accounting income, subject to consideration of prudence.
+[H] Provisions, Contingent Liabilities and Contingent Assets
+A provision is recognised when there is a present obligation as a result of a past event and it is probable that an outflow of resources will be required to settle it. Contingent liabilities are not recognised but are disclosed in the notes. Contingent assets are neither recognised nor disclosed.
 
-2.9 Provisions and contingent liabilities
-Provisions are recognised when there is a present obligation as a result of past events and it is probable that an outflow of resources will be required. Contingent liabilities are disclosed in the notes.`;
+[I] Cash and Cash Equivalents
+Cash and cash equivalents include cash on hand, balances with banks and short-term deposits with an original maturity of three months or less.`;
+
+// additional notes printed after the notes to the Statement of Profit and Loss
+const OTHER_NOTES = [
+  ["Contingent Liabilities", "Contingent liabilities not provided for in the financial statements: Nil (Previous year: Nil)."],
+  ["Related Party Disclosures", "Key management personnel: the partners of the firm. Transactions with them during the year (capital introduced, withdrawals, interest on capital and remuneration) are disclosed in the Partners' Capital Account."],
+  ["", "Balances of trade receivables, trade payables and loans and advances are subject to confirmation and reconciliation, if any."],
+  ["", "In the opinion of the partners, the current assets, loans and advances have a value on realisation in the ordinary course of business at least equal to the amount at which they are stated in the Balance Sheet, and the provisions for all known liabilities are adequate and neither in excess of nor short of the amount reasonably necessary."],
+  ["", "Previous year's figures have been regrouped, rearranged and reclassified wherever necessary to make them comparable with those of the current year."],
+];
 
 /* ---------------- state ---------------- */
 function blankState(name) {
@@ -605,10 +644,11 @@ function blankState(name) {
   return {
     v: 1, id: uid(), updatedAt: Date.now(),
     info: { name: name || "New entity", type: "Partnership firm", fyEnd: "2026-03-31", unit: "Rs.", dec: 0, ownerWord: "Partner",
-      place: "", date: "", caFirm: "", frn: "", caName: "", mno: "", about: "", policies: POLICIES },
+      skipNil: true, place: "", date: "", caFirm: "", frn: "", caName: "", caDesig: "Partner", mno: "", udin: "", regLine: "", about: "", policies: POLICIES },
     allocate: true,
     partners: [{ id: uid(), name: "", share: 50, pshare: 50, cy: {}, py: {} }, { id: uid(), name: "", share: 50, pshare: 50, cy: {}, py: {} }],
     vals: {}, extra: {}, text: {}, parties: { debtors: [], creditors: [] },
+    otherNotes: OTHER_NOTES.map(([title, text]) => ({ id: uid(), title, text })),
     fa: { assets: FA_DEFAULT.map(([name, kind, rate]) => ({ id: uid(), name, kind, rate })), py: {} },
     cwip: {}, iaud: {},
   };
@@ -689,8 +729,20 @@ function compute() {
     for (const k of ["debtors", "creditors"]) C[`${k}.T.${y}`] = 0;
     for (const a of ["lt6", "gt6"]) for (const st of ["sec", "unsec", "doubt"]) C[`debtors.${a}.${st}.${y}`] = 0;
     C[`creditors.msme.${y}`] = 0; C[`creditors.oth.${y}`] = 0;
-    for (const p of S.parties.debtors) { const v = num(p[y]); C[`debtors.${p.age || "lt6"}.${p.st || "unsec"}.${y}`] += v; C[`debtors.T.${y}`] += v; }
-    for (const p of S.parties.creditors) { const v = num(p[y]); C[`creditors.${p.msme === "yes" ? "msme" : "oth"}.${y}`] += v; C[`creditors.T.${y}`] += v; }
+    for (const p of S.parties.debtors) {
+      const v = num(p[y]), bk = (y === "py" ? p.bucketPy : p.bucket) || p.bucket || "m6";
+      C[`debtors.${halfOf(bk)}.${p.st || "unsec"}.${y}`] += v; C[`debtors.T.${y}`] += v;
+      const row = (p.disp === "yes" ? "d" : "u") + (p.st === "doubt" ? "bad" : "good");
+      C[`ag.debtors.${y}.${row}.${bk}`] = (C[`ag.debtors.${y}.${row}.${bk}`] || 0) + v;
+      C[`ag.debtors.${y}.${row}.T`] = (C[`ag.debtors.${y}.${row}.T`] || 0) + v;
+    }
+    for (const p of S.parties.creditors) {
+      const v = num(p[y]), bk = (y === "py" ? p.bucketPy : p.bucket) || p.bucket || "y1";
+      C[`creditors.${p.msme === "yes" ? "msme" : "oth"}.${y}`] += v; C[`creditors.T.${y}`] += v;
+      const row = (p.disp === "yes" ? "d" : "u") + (p.msme === "yes" ? "m" : "o");
+      C[`ag.creditors.${y}.${row}.${bk}`] = (C[`ag.creditors.${y}.${row}.${bk}`] || 0) + v;
+      C[`ag.creditors.${y}.${row}.T`] = (C[`ag.creditors.${y}.${row}.T`] || 0) + v;
+    }
   }
   for (const y of ["cy", "py"]) {
     C[`p.rem.${y}`] = S.partners.reduce((a, p) => a + num(p[y].rem), 0);
@@ -734,20 +786,21 @@ function compute() {
     const B = {};
     B.cap = g(`p.T.close.${y}`); B.res = g(`n4.t.${y}`); B.of = B.cap + B.res;
     const dt = g(`n6.t.${y}`);
-    B.ltb = g(`n5a.t.${y}`); B.dtl = Math.max(dt, 0); B.oltl = g(`n7.t.${y}`); B.ltp = g(`n8.t.lt_${y}`);
+    B.ltb = g(`n5a.t.${y}`); B.dtl = Math.max(dt, 0); B.oltl = g(`n7.t.${y}`); B.ltp = g(`n8a.t.${y}`);
     B.ncl = B.ltb + B.dtl + B.oltl + B.ltp;
-    B.stb = g(`n5b.t.${y}`); B.tp = g(`n9.t.${y}`); B.ocl = g(`n10.t.${y}`); B.stp = g(`n8.t.st_${y}`);
+    B.stb = g(`n5b.t.${y}`); B.tp = g(`n9.t.${y}`); B.ocl = g(`n10.t.${y}`); B.stp = g(`n8b.t.${y}`);
     B.cl = B.stb + B.tp + B.ocl + B.stp;
     B.el = B.of + B.ncl + B.cl;
     B.ppe = g(`ppe.tangible.net_${y}`); B.intang = g(`ppe.intangible.net_${y}`); B.cwip = g(`cwip.close_${y}`); B.iaud = g(`iaud.close_${y}`);
-    B.nci = g(`n12a.t.${y}`); B.dta = Math.max(-dt, 0); B.ltla = g(`n13.t.lt_${y}`); B.onca = g(`n14.t.${y}`);
+    B.nci = g(`n12a.t.${y}`); B.dta = Math.max(-dt, 0); B.ltla = g(`n13a.t.${y}`); B.onca = g(`n14.t.${y}`);
     B.nca = B.ppe + B.intang + B.cwip + B.iaud + B.nci + B.dta + B.ltla + B.onca;
-    B.ci = g(`n12b.t.${y}`); B.inv = g(`n15.t.${y}`); B.tr = g(`n16.t.${y}`); B.cash = g(`n17.t.${y}`); B.stla = g(`n13.t.st_${y}`); B.oca = g(`n18.t.${y}`);
+    B.ci = g(`n12b.t.${y}`); B.inv = g(`n15.t.${y}`); B.tr = g(`n16.t.${y}`); B.cash = g(`n17.t.${y}`); B.stla = g(`n13b.t.${y}`); B.oca = g(`n18.t.${y}`);
     B.ca = B.ci + B.inv + B.tr + B.cash + B.stla + B.oca;
     B.as = B.nca + B.ca;
     B.diff = B.el - B.as;
     for (const k in B) C[`bs.${k}.${y}`] = B[k];
   }
+  numberNotes();
 }
 
 /* ---------------- checks ---------------- */
@@ -790,6 +843,7 @@ const NAV = [
   ["Statements (automatic)", [["bs", "", "Balance Sheet"], ["pl", "", "Profit and Loss"], ["checks", "", "Checks"]]],
   ["Notes – Balance Sheet", NOTE_ORDER.filter(id => NOTE_BY[id]?.grp !== "pl").map(id => [id, NN(id), TITLE_OF[id] || NOTE_BY[id].title])],
   ["Notes – Profit and Loss", [...NOTE_ORDER.filter(id => NOTE_BY[id]?.grp === "pl").map(id => [id, NN(id), NOTE_BY[id].title]), ["tx", "", NOTE_BY.tx.title]]],
+  ["Other notes", [["on", "", "Additional notes"]]],
 ];
 function renderNav() {
   $("#sideNav").innerHTML = NAV.map(([g, items]) => `<h4>${esc(g)}</h4>` + items.map(([id, no, t]) =>
@@ -846,8 +900,8 @@ function footBox(key, placeholder, label) {
   return `<div class="sheet foot"><label for="ft_${key}">${esc(label)}</label><textarea id="ft_${key}" data-txt="${key}" placeholder="${esc(placeholder)}">${esc(S.text[key] || "")}</textarea></div>`;
 }
 function bsLineFor(id) {
-  const m = { n4: "Reserves and surplus", n5a: "Long-term borrowings", n5b: "Short-term borrowings", n6: "Deferred tax liability / asset (net)", n7: "Other long-term liabilities", n8: "Long-term and short-term provisions",
-    n9: "Trade payables", n10: "Other current liabilities", n12a: "Non-current investments", n12b: "Current investments", n13: "Long-term and short-term loans and advances",
+  const m = { n4: "Reserves and surplus", n5a: "Long-term borrowings", n5b: "Short-term borrowings", n6: "Deferred tax liability / asset (net)", n7: "Other long-term liabilities", n8a: "Long-term provisions", n8b: "Short-term provisions",
+    n9: "Trade payables", n10: "Other current liabilities", n12a: "Non-current investments", n12b: "Current investments", n13a: "Long-term loans and advances", n13b: "Short-term loans and advances",
     n14: "Other non-current assets", n15: "Inventories", n16: "Trade receivables", n17: "Cash and bank balances", n18: "Other current assets",
     n19: "Revenue from operations", n20: "Other income", n21: "Cost of goods sold", n22: "Employee benefits expense", n23: "Finance costs", n24: "Depreciation and amortisation expense", n25: "Other expenses" };
   return m[id];
@@ -856,8 +910,8 @@ function pageNote(note) {
   const where = note.grp === "bs" ? "bs" : "pl";
   const line = bsLineFor(note.id);
   return `<div class="page-head"><h1>${NN(note.id) ? `<span class="nno">Note ${NN(note.id)}</span>` : ""}${esc(note.title)}</h1>
-    <span class="status">Amount in ${esc(S.info.unit)}</span></div>
-    ${note.lead || note.hint || line ? `<p class="lead">${esc(note.lead || note.hint || "")} ${line ? `The total flows to <button class="link" data-go="${where}">${esc(line)}</button> in the ${where === "bs" ? "Balance Sheet" : "Statement of Profit and Loss"}.` : ""}</p>` : ""}
+    <span class="status">${esc(unitLabel())}</span></div>
+    ${note.lead || note.hint || line ? `<p class="lead">${esc([note.lead, note.hint].filter(Boolean).join(" "))} ${line ? `The total flows to <button class="link" data-go="${where}">${esc(line)}</button> in the ${where === "bs" ? "Balance Sheet" : "Statement of Profit and Loss"}.` : ""}</p>` : ""}
     ${note.parties ? partyTable(note.parties) : ""}
     ${note.parties ? `<h2 style="font-family:var(--font-doc);font-size:18px;margin:6px 0 0">Note as it will print</h2>` : ""}
     ${noteTable(note)}
@@ -869,24 +923,28 @@ const PARTY = {
   debtors: { note: "n16", title: "Party-wise trade receivables", sheet: "Debtors", noun: "debtor" },
   creditors: { note: "n9", title: "Party-wise trade payables", sheet: "Creditors", noun: "creditor" },
 };
-const AGE = [["lt6", "Less than 6 months"], ["gt6", "More than 6 months"]];
+const AGE_DEB = [["nd", "Not due"], ["m6", "Less than 6 months"], ["y1", "6 months – 1 year"], ["y2", "1 – 2 years"], ["y3", "2 – 3 years"], ["y3p", "More than 3 years"]];
+const AGE_CRED = [["nd", "Not due"], ["y1", "Less than 1 year"], ["y2", "1 – 2 years"], ["y3", "2 – 3 years"], ["y3p", "More than 3 years"]];
+const halfOf = b => b === "nd" || b === "m6" ? "lt6" : "gt6";
 const DST = [["unsec", "Unsecured, considered good"], ["sec", "Secured, considered good"], ["doubt", "Doubtful"]];
 function partyTable(kind) {
   const d = dates(S), list = S.parties[kind], deb = kind === "debtors";
   const sel = (p, f, opts) => `<select data-pt="${kind}" data-pid="${p.id}" data-pf="${f}" aria-label="${f}">${opts.map(([v, l]) => `<option value="${v}" ${String(p[f]) === v ? "selected" : ""}>${l}</option>`).join("")}</select>`;
   const amt = (p, f) => `<td class="num"><input class="amt" inputmode="decimal" data-pt="${kind}" data-pid="${p.id}" data-pf="${f}" value="${esc(fmtIn(p[f]))}" aria-label="${f}"></td>`;
-  const head = `<tr><th>Sr.</th><th>Name of party</th><th>Group</th>${deb ? "<th>Outstanding for</th><th>Classification</th>" : "<th>MSME</th>"}<th class="num">${esc(d.cy)}</th><th class="num">${esc(d.py)}</th><th></th></tr>`;
+  const AG = deb ? AGE_DEB : AGE_CRED;
+  const head = `<tr><th>Sr.</th><th>Name of party</th><th>Group</th>${deb ? "<th>Classification</th>" : "<th>MSME</th>"}<th>Disputed</th>
+    <th>Ageing ${esc(d.cy)}</th><th class="num">${esc(d.cy)}</th><th>Ageing ${esc(d.py)}</th><th class="num">${esc(d.py)}</th><th></th></tr>`;
   const rows = list.map((p, i) => `<tr><td class="tag">${i + 1}</td>
     <td class="lbl"><input class="lbl-in" data-pt="${kind}" data-pid="${p.id}" data-pf="name" value="${esc(p.name)}" placeholder="Name of party" aria-label="Name of party"></td>
     <td><input class="lbl-in" style="min-width:120px" data-pt="${kind}" data-pid="${p.id}" data-pf="grp" value="${esc(p.grp)}" placeholder="e.g. Vehicle debtors" aria-label="Group"></td>
-    ${deb ? `<td>${sel(p, "age", AGE)}</td><td>${sel(p, "st", DST)}</td>` : `<td>${sel(p, "msme", [["no", "No"], ["yes", "Yes"]])}</td>`}
-    ${amt(p, "cy")}${amt(p, "py")}<td><button class="rowx" data-ptdel="${kind}" data-pid="${p.id}" aria-label="Remove party">×</button></td></tr>`).join("");
-  const span = deb ? 4 : 3;
+    ${deb ? `<td>${sel(p, "st", DST)}</td>` : `<td>${sel(p, "msme", [["no", "No"], ["yes", "Yes"]])}</td>`}<td>${sel(p, "disp", [["no", "No"], ["yes", "Yes"]])}</td>
+    <td>${sel(p, "bucket", AG)}</td>${amt(p, "cy")}<td>${sel(p, "bucketPy", AG)}</td>${amt(p, "py")}<td><button class="rowx" data-ptdel="${kind}" data-pid="${p.id}" aria-label="Remove party">×</button></td></tr>`).join("");
+  const span = 5;
   return `<h2 style="font-family:var(--font-doc);font-size:18px;margin:6px 0 0">${PARTY[kind].title}</h2>
-  <p class="lead">${list.length ? `The note below totals itself from this list${deb ? " by period and classification" : " (MSME and others)"}.` : `Add each ${PARTY[kind].noun} here, or paste the list from Excel or Tally. While the list is empty you can type totals straight into the note below.`}</p>
+  <p class="lead">${list.length ? `The note and its ageing schedule total themselves from this list${deb ? " by ageing and classification" : " (MSME and others)"}. Ageing is counted from the due date of payment.` : `Add each ${PARTY[kind].noun} here, or paste the list from Excel or Tally. While the list is empty you can type totals straight into the note below.`}</p>
   <div class="sheet scroll"><table class="grid party"><thead>${head}</thead><tbody>${rows}
-    <tr class="addrow"><td class="tag"></td><td colspan="${span}"><button class="btn small" data-padd="${kind}">+ Add party</button></td><td class="num"></td><td class="num"></td><td></td></tr>
-    <tr class="tot"><td class="tag"></td><td colspan="${span}">Total</td><td class="num calc" data-calc="${kind}.T.cy"></td><td class="num calc" data-calc="${kind}.T.py"></td><td></td></tr>
+    <tr class="addrow"><td class="tag"></td><td colspan="${span}"><button class="btn small" data-padd="${kind}">+ Add party</button></td><td class="num"></td><td></td><td class="num"></td><td></td></tr>
+    <tr class="tot"><td class="tag"></td><td colspan="${span}">Total</td><td class="num calc" data-calc="${kind}.T.cy"></td><td></td><td class="num calc" data-calc="${kind}.T.py"></td><td></td></tr>
   </tbody></table></div>
   <details class="sheet foot"><summary><b>Paste a list from Excel or Tally</b></summary>
     <p class="status" style="margin:6px 0">Copy the cells and paste below, one party per line, columns in this order: Party name, Amount ${esc(d.cy)}, Group, Amount ${esc(d.py)}. Only the first two are needed. Header and total lines are skipped.</p>
@@ -902,8 +960,8 @@ function pasteParties(kind) {
     if (c.length < 2 || !c[0] || /^(party|particulars|name|total|grand total)/i.test(c[0])) continue;
     const cy = parseAmt(c[1]);
     if (!cy && !parseAmt(c[3] || "")) continue;
-    S.parties[kind].push(kind === "debtors" ? { id: uid(), name: c[0], grp: c[2] || "", age: "lt6", st: "unsec", cy, py: parseAmt(c[3] || "") }
-      : { id: uid(), name: c[0], grp: c[2] || "", msme: /msme|micro|small/i.test(c[2] || "") ? "yes" : "no", cy, py: parseAmt(c[3] || "") });
+    S.parties[kind].push(kind === "debtors" ? { id: uid(), name: c[0], grp: c[2] || "", st: "unsec", disp: "no", bucket: "m6", bucketPy: "m6", cy, py: parseAmt(c[3] || "") }
+      : { id: uid(), name: c[0], grp: c[2] || "", msme: /msme|micro|small/i.test(c[2] || "") ? "yes" : "no", disp: "no", bucket: "y1", bucketPy: "y1", cy, py: parseAmt(c[3] || "") });
     n++;
   }
   ta.value = "";
@@ -923,7 +981,7 @@ function pageN3() {
     <td class="num calc" data-calc="p.${p.id}.share.${y}"></td><td class="num calc" data-calc="p.${p.id}.close.${y}"></td>
     <td><button class="rowx" data-pdel="${p.id}" aria-label="Remove">×</button></td></tr>`).join("");
   const tot = `<tr class="tot"><td></td><td>Total</td><td class="num calc">${C["p.shareT." + y] ?? ""}%</td>${["open", "intro", "wd", "int", "rem", "share", "close"].map(f => `<td class="num calc" data-calc="p.T.${f}.${y}"></td>`).join("")}<td></td></tr>`;
-  return `<div class="page-head"><h1><span class="nno">Note ${NN("n3")}</span>Owners' capital account</h1><span class="status">Amount in ${esc(S.info.unit)}</span></div>
+  return `<div class="page-head"><h1><span class="nno">Note ${NN("n3")}</span>Owners' capital account</h1><span class="status">${esc(unitLabel())}</span></div>
   <p class="lead">Closing balance = opening + addition − withdrawal + interest on capital + partners' remuneration + profit/(loss). Remuneration flows to item X of the Statement of Profit and Loss and interest to Finance costs (Note ${NN("n23")}). The share of profit is worked out from the profit for the year and the sharing ratio.</p>
   <div class="toolbar"><div class="tabs" role="tablist"><button data-p3="cy" class="${y === "cy" ? "on" : ""}">Year ended ${esc(d.cy)}</button><button data-p3="py" class="${y === "py" ? "on" : ""}">Year ended ${esc(d.py)}</button></div>
   <button class="btn small" id="addPartner">+ Add ${esc(ow.toLowerCase())}</button></div>
@@ -966,7 +1024,7 @@ function wipTable(w, title) {
     <tr class="tot"><td>Closing balance</td>${cal("close_cy")}${cal("close_py")}</tr></tbody></table></div>`;
 }
 function pageN11() {
-  return `<div class="page-head"><h1><span class="nno">Note ${NN("n11")}</span>Fixed assets</h1><span class="status">Amount in ${esc(S.info.unit)}</span></div>
+  return `<div class="page-head"><h1><span class="nno">Note ${NN("n11")}</span>Fixed assets</h1><span class="status">${esc(unitLabel())}</span></div>
   <p class="lead">Written down value method. Depreciation = (opening + additions used 180 days or more − sale) × rate, plus additions used less than 180 days × half the rate. W.D.V. of tangible and intangible blocks flows to the Balance Sheet, and depreciation to Note 24. Enter the previous year as totals.</p>
   ${faTable()}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">${wipTable("cwip", "Capital work-in-progress")}${wipTable("iaud", "Intangible assets under development")}</div>
@@ -974,81 +1032,14 @@ function pageN11() {
 }
 
 /* ---------------- render: statements ---------------- */
-function stmtTable(rows, d, tail) {
-  return `<table class="st"><thead><tr><th></th><th>Particulars</th><th>Note</th><th>${esc(d.cy)}</th><th class="gap"></th><th>${esc(d.py)}</th></tr></thead><tbody>` +
-    rows.map(([t, tag, label, note, key]) => {
-      const nt = note ? `<button class="link" data-go="${note}">${NN(note)}</button>` : "";
-      const v = key ? [C[key + ".cy"], C[key + ".py"]] : null;
-      return `<tr class="${t}"><td class="tag">${esc(tag)}</td><td class="lb">${esc(label)}</td><td class="nt">${nt}</td>${v ? `<td class="v">${fmt(v[0])}</td><td class="gap"></td><td class="v">${fmt(v[1])}</td>` : '<td class="v"></td><td class="gap"></td><td class="v"></td>'}</tr>`;
-    }).join("") + (tail || []).map(t => `<tr><td class="tag"></td><td class="lb">${t[0]}</td><td class="nt">${t[1] || ""}</td><td class="v"></td><td class="gap"></td><td class="v"></td></tr>`).join("") + "</tbody></table>";
-}
-function sigBlock() {
-  const i = S.info, ow = i.ownerWord || "Partner";
-  const names = S.partners.filter(p => p.name).map(p => `<div class="line">${esc(p.name)}<br><span class="status">${esc(ow)}</span></div>`).join("");
-  return `<div class="sig"><div>${i.caFirm ? `As per our report of even date<br>For <b>${esc(i.caFirm)}</b><br>Chartered Accountants<br>${i.frn ? "FRN: " + esc(i.frn) : ""}<div class="line">${esc(i.caName)}<br><span class="status">Partner${i.mno ? " · M. No. " + esc(i.mno) : ""}</span></div>` : ""}
-    <div class="line status">Place: ${esc(i.place)}<br>Date: ${esc(i.date)}</div></div>
-    <div>For <b>${esc(i.name)}</b>${names}</div></div>`;
-}
-function bsRows() {
-  return [
-    ["h", "I", "EQUITY AND LIABILITIES"], ["h", "1", "Owners' funds"],
-    ["r", "(a)", "Owners' capital account", "n3", "bs.cap"], ["r", "(b)", "Reserves and surplus", "n4", "bs.res"], ["s", "", "", "", "bs.of"],
-    ["h", "2", "Non-current liabilities"],
-    ["r", "(a)", "Long-term borrowings", "n5a", "bs.ltb"], ["r", "(b)", "Deferred tax liabilities (net)", "n6", "bs.dtl"],
-    ["r", "(c)", "Other long-term liabilities", "n7", "bs.oltl"], ["r", "(d)", "Long-term provisions", "n8", "bs.ltp"], ["s", "", "", "", "bs.ncl"],
-    ["h", "3", "Current liabilities"],
-    ["r", "(a)", "Short-term borrowings", "n5b", "bs.stb"], ["r", "(b)", "Trade payables", "n9", "bs.tp"],
-    ["r", "(c)", "Other current liabilities", "n10", "bs.ocl"], ["r", "(d)", "Short-term provisions", "n8", "bs.stp"], ["s", "", "", "", "bs.cl"],
-    ["T", "", "TOTAL", "", "bs.el"],
-    ["h", "II", "ASSETS"], ["h", "1", "Non-current assets"],
-    ["r", "(a)", "Property, plant and equipment and intangible assets"],
-    ["rr", "(i)", "Property, plant and equipment", "n11", "bs.ppe"], ["rr", "(ii)", "Intangible assets", "n11", "bs.intang"],
-    ["rr", "(iii)", "Capital work-in-progress", "n11", "bs.cwip"], ["rr", "(iv)", "Intangible assets under development", "n11", "bs.iaud"],
-    ["r", "(b)", "Non-current investments", "n12a", "bs.nci"], ["r", "(c)", "Deferred tax assets (net)", "n6", "bs.dta"],
-    ["r", "(d)", "Long-term loans and advances", "n13", "bs.ltla"], ["r", "(e)", "Other non-current assets", "n14", "bs.onca"], ["s", "", "", "", "bs.nca"],
-    ["h", "2", "Current assets"],
-    ["r", "(a)", "Current investments", "n12b", "bs.ci"], ["r", "(b)", "Inventories", "n15", "bs.inv"], ["r", "(c)", "Trade receivables", "n16", "bs.tr"],
-    ["r", "(d)", "Cash and bank balances", "n17", "bs.cash"], ["r", "(e)", "Short-term loans and advances", "n13", "bs.stla"], ["r", "(f)", "Other current assets", "n18", "bs.oca"], ["s", "", "", "", "bs.ca"],
-    ["T", "", "TOTAL", "", "bs.as"],
-  ];
-}
 function pageBS() {
-  const d = dates(S), rows = bsRows();
-  return `<div class="page-head"><h1>Balance Sheet</h1><span class="status">Prepared automatically from the notes. Tap a note number to edit it.</span></div>
+  return `<div class="page-head"><h1>Balance Sheet</h1><span class="status">Prepared automatically from the notes. This is how it prints.</span></div>
   ${diffBanner()}
-  <div class="sheet scroll"><div class="stmt"><p class="ent">${esc(S.info.name)}</p><p class="ttl">Balance Sheet as at ${esc(d.cy)}</p>
-  <div class="unit">(Amount in ${esc(S.info.unit)})</div>${stmtTable(rows, d, [["&nbsp;"], ["Brief about the Entity", "1"], ["Summary of significant accounting policies", "2"], ["&nbsp;"], ["The accompanying notes are an integral part of the financial statements"]])}
-  ${sigBlock()}</div></div>`;
-}
-function plRows() {
-  return [
-    ["r", "I", "Revenue from operations", "n19", "pl.rev"], ["r", "II", "Other income", "n20", "pl.oi"], ["T", "III", "Total income (I + II)", "", "pl.ti"],
-    ["h", "IV", "Expenses"],
-    ["r", "(a)", "Cost of goods sold", "n21", "pl.cogs"], ["r", "(b)", "Employee benefits expense", "n22", "pl.emp"], ["r", "(c)", "Finance costs", "n23", "pl.fin"],
-    ["r", "(d)", "Depreciation and amortisation expense", "n24", "pl.dep"], ["r", "(e)", "Other expenses", "n25", "pl.oth"], ["s", "", "Total expenses", "", "pl.exp"],
-    ["h", "V", "Profit/(loss) before exceptional and extraordinary items, partners' remuneration and tax (III − IV)", "", "pl.v"],
-    ["r", "VI", "Exceptional items", "tx", "pl.exc"],
-    ["h", "VII", "Profit/(loss) before extraordinary items, partners' remuneration and tax (V − VI)", "", "pl.vii"],
-    ["r", "VIII", "Extraordinary items", "tx", "pl.ext"],
-    ["h", "IX", "Profit before partners' remuneration and tax (VII − VIII)", "", "pl.ix"],
-    ["r", "X", "Partners' remuneration", "n3", "pl.rem"],
-    ["h", "XI", "Profit before tax (IX − X)", "", "pl.pbt"],
-    ["h", "XII", "Tax expense"],
-    ["r", "(a)", "Current tax", "tx", "pl.cur"], ["r", "(b)", "Excess / short provision of tax relating to earlier years", "tx", "pl.ey"],
-    ["r", "(c)", "Deferred tax charge/(benefit)", "n6", "pl.def"], ["s", "", "", "", "pl.tax"],
-    ["h", "XIII", "Profit/(loss) for the period from continuing operations (XI − XII)", "", "pl.cont"],
-    ["r", "XIV", "Profit/(loss) from discontinuing operations", "tx", "pl.dp"],
-    ["r", "XV", "Tax expense of discontinuing operations", "tx", "pl.dt"],
-    ["h", "XVI", "Profit/(loss) from discontinuing operations after tax (XIV − XV)", "", "pl.disc"],
-    ["T", "XVII", "Profit/(loss) for the year (XIII + XVI)", "", "pl.profit"],
-  ];
+  <div class="sheet scroll"><div class="fsdoc" style="min-width:620px">${stmtHTML("bs")}</div></div>`;
 }
 function pagePL() {
-  const d = dates(S), rows = plRows();
-  return `<div class="page-head"><h1>Statement of Profit and Loss</h1><span class="status">Prepared automatically from the notes.</span></div>
-  <div class="sheet scroll"><div class="stmt"><p class="ent">${esc(S.info.name)}</p><p class="ttl">Statement of Profit and Loss for the year ended ${esc(d.cy)}</p>
-  <div class="unit">(Amount in ${esc(S.info.unit)})</div>${stmtTable(rows, d, [["&nbsp;"], ["The accompanying notes are an integral part of the financial statements"], ["<i>* wherever applicable</i>"]])}
-  ${sigBlock()}</div></div>`;
+  return `<div class="page-head"><h1>Statement of Profit and Loss</h1><span class="status">Prepared automatically from the notes. This is how it prints.</span></div>
+  <div class="sheet scroll"><div class="fsdoc" style="min-width:620px">${stmtHTML("pl")}</div></div>`;
 }
 function diffBanner() {
   const bad = ["cy", "py"].filter(y => Math.abs(C["bs.diff." + y]) >= 0.5 / Math.pow(10, DEC));
@@ -1075,19 +1066,31 @@ function pageInfo() {
     ${f("name", "Name of the entity")}
     ${sel("type", "Type of entity", types)}
     ${f("fyEnd", "Financial year ends on", "date")}
-    ${sel("unit", "Amounts are entered in", [["Rs.", "Rupees"], ["Rs. in thousands", "Rupees in thousands"], ["Rs. in lakhs", "Rupees in lakhs"], ["Rs. in crores", "Rupees in crores"]])}
+    ${sel("unit", "Amounts are entered in", [["Rs.", "Rupees (₹)"], ["Rs. in thousands", "₹ in thousands ('000)"], ["Rs. in lakhs", "₹ in lakhs"], ["Rs. in crores", "₹ in crores"]])}
+    ${f("regLine", "PAN / registration no. (cover page)", "text", 'placeholder="e.g. PAN AABFS1234K"')}
     ${sel("dec", "Decimals shown", [[0, "None"], [2, "Two"]])}
-    ${sel("skipNil", "Lines with nil in both years (Excel)", [["", "Print every line of the format"], ["true", "Leave them out"]])}
+    ${sel("skipNil", "Lines with nil in both years (Excel and PDF)", [["true", "Leave them out"], ["", "Print every line of the format"]])}
     ${sel("ownerWord", "Owners are called", [["Partner", "Partner"], ["Proprietor", "Proprietor"], ["Member", "Member"], ["Karta / Coparcener", "Karta / Coparcener"], ["Trustee", "Trustee"]])}
   </div></div>
   <h2 style="font-family:var(--font-doc);font-size:18px;margin:6px 0 0">Signing block</h2>
   <div class="sheet"><div class="form">
-    ${f("caFirm", "Auditor's firm name")}${f("frn", "Firm registration no. (FRN)")}${f("caName", "Signing partner")}${f("mno", "Membership no.")}
-    ${f("place", "Place")}${f("date", "Date of signing")}
+    ${f("caFirm", "Auditor's firm name")}${f("frn", "Firm registration no. (FRN)")}${f("caName", "Signing CA")}
+    ${sel("caDesig", "Signing CA is the firm's", [["Partner", "Partner"], ["Proprietor", "Proprietor"]])}${f("mno", "Membership no.")}${f("udin", "UDIN")}
+    ${f("place", "Place")}${f("date", "Date of signing", "text", 'placeholder="dd/mm/yyyy"')}
   </div></div>
   <div class="sheet"><div class="foot"><label>Remove this entity</label>
     ${deleteArmed ? `<div class="confirm">Delete <b>${esc(i.name)}</b> and all its figures? This cannot be undone. <button class="btn danger small" id="delYes">Delete</button><button class="btn small" id="delNo">Keep</button></div>`
       : `<div><button class="btn danger small" id="delEntity">Delete entity…</button></div>`}</div></div>`;
+}
+function pageOther() {
+  const first = NOTE_COUNT + 3;
+  return `<div class="page-head"><h1>Additional notes</h1></div>
+  <p class="lead">Printed after the notes to the Statement of Profit and Loss, numbered from ${first}. Leave the heading blank for a plain numbered paragraph. Edit the text to suit the entity.</p>
+  ${S.otherNotes.map((n, i) => `<div class="sheet foot"><div style="display:flex;gap:8px;align-items:center"><b>${first + i}</b>
+      <input class="txt" style="flex:1;min-width:0" data-on="${n.id}" data-of="title" value="${esc(n.title)}" placeholder="Heading (optional)" aria-label="Heading">
+      <button class="rowx" data-ondel="${n.id}" aria-label="Remove note">×</button></div>
+    <textarea data-on="${n.id}" data-of="text" aria-label="Note text">${esc(n.text)}</textarea></div>`).join("")}
+  <div><button class="btn small" id="addOther">+ Add note</button></div>`;
 }
 function pageN1() {
   return `<div class="page-head"><h1><span class="nno">Notes 1–2</span>About the entity and accounting policies</h1></div>
@@ -1103,6 +1106,7 @@ function render() {
   let html;
   if (route === "info") html = pageInfo();
   else if (route === "n1") html = pageN1();
+  else if (route === "on") html = pageOther();
   else if (route === "bs") html = pageBS();
   else if (route === "pl") html = pagePL();
   else if (route === "checks") html = pageChecks();
@@ -1137,11 +1141,13 @@ page.addEventListener("input", e => {
   else if (ds.fa) { S.fa.assets.find(a => a.id === ds.fa)[ds.f] = parseAmt(t.value); }
   else if (ds.fan) { S.fa.assets.find(a => a.id === ds.fan).name = t.value; }
   else if (ds.fak) { S.fa.assets.find(a => a.id === ds.fak).kind = t.value; }
+  else if (ds.on) { S.otherNotes.find(n => n.id === ds.on)[ds.of] = t.value; }
   else if (ds.fapy) { (S.fa.py ||= {})[ds.fapy] = parseAmt(t.value); }
   else if (ds.pt) {
     const p = S.parties[ds.pt].find(x => x.id === ds.pid); const f = ds.pf;
     p[f] = f === "cy" || f === "py" ? parseAmt(t.value) : t.value;
-    if (f === "age" || f === "st" || f === "msme") { touch(); render(); return; }
+    if (f === "bucket" && (!p.bucketPy || p.bucketPy === p._lastBucket)) p.bucketPy = t.value;
+    if (["bucket", "bucketPy", "st", "msme", "disp"].includes(f)) { p._lastBucket = p.bucket; touch(); render(); return; }
   }
   else if (ds.wip) { S[ds.wip][ds.f] = parseAmt(t.value); }
   else if (ds.txt) { S.text[ds.txt] = t.value; }
@@ -1173,9 +1179,11 @@ page.addEventListener("click", e => {
   if (b.id === "addPartner") { S.partners.push({ id: uid(), name: "", share: 0, pshare: 0, cy: {}, py: {} }); touch(); render(); return; }
   if (ds.pdel) { S.partners = S.partners.filter(p => p.id !== ds.pdel); touch(); render(); return; }
   if (b.id === "addAsset") { S.fa.assets.push({ id: uid(), name: "", kind: "t", rate: 15 }); touch(); render(); const ins = page.querySelectorAll("[data-fan]"); ins[ins.length - 1]?.focus(); return; }
-  if (ds.padd) { S.parties[ds.padd].push(ds.padd === "debtors" ? { id: uid(), name: "", grp: "", age: "lt6", st: "unsec" } : { id: uid(), name: "", grp: "", msme: "no" }); touch(); render(); const ins = page.querySelectorAll(`[data-pt="${ds.padd}"][data-pf="name"]`); ins[ins.length - 1]?.focus(); return; }
+  if (ds.padd) { S.parties[ds.padd].push(ds.padd === "debtors" ? { id: uid(), name: "", grp: "", st: "unsec", disp: "no", bucket: "m6", bucketPy: "m6" } : { id: uid(), name: "", grp: "", msme: "no", disp: "no", bucket: "y1", bucketPy: "y1" }); touch(); render(); const ins = page.querySelectorAll(`[data-pt="${ds.padd}"][data-pf="name"]`); ins[ins.length - 1]?.focus(); return; }
   if (ds.ptdel) { S.parties[ds.ptdel] = S.parties[ds.ptdel].filter(x => x.id !== ds.pid); touch(); render(); return; }
   if (ds.paste) { pasteParties(ds.paste); return; }
+  if (b.id === "addOther") { S.otherNotes.push({ id: uid(), title: "", text: "" }); touch(); render(); return; }
+  if (ds.ondel) { S.otherNotes = S.otherNotes.filter(n => n.id !== ds.ondel); touch(); render(); return; }
   if (ds.fadel) { S.fa.assets = S.fa.assets.filter(a => a.id !== ds.fadel); touch(); render(); return; }
   if (b.id === "delEntity") { deleteArmed = true; render(); return; }
   if (b.id === "delNo") { deleteArmed = false; render(); return; }
@@ -1246,28 +1254,43 @@ $("#restoreFile").addEventListener("change", e => {
   };
   rd.readAsText(f);
 });
-/* ---------------- Excel export: styled like the ICAI NCE format workbook ---------------- */
-// Trebuchet MS 10, boxed value columns, accounting number style; statements portrait A4, notes landscape A4; printed at 100%, opened at 110%
-const XF = "Trebuchet MS";
+/* ---------------- Excel and PDF export: presentation of the financial statements ---------------- */
+// One layout feeds both writers: XSheet (Excel via ExcelJS) and HSheet (A4 HTML pages for PDF).
+// Calibri 10, boxed tables, two columns per year on the face (items, then group totals), brackets for negatives.
+const XF = "Calibri";
 let RH = 13.5;
-const ACC = () => DEC ? '_ * #,##0.00_ ;_ * \\-#,##0.00_ ;_ * "-"??_ ;_ @_ ' : '_ * #,##0_ ;_ * \\-#,##0_ ;_ * "-"??_ ;_ @_ ';
-function nLines(text, w) { return String(text ?? "").split("\n").reduce((n, p) => n + Math.max(1, Math.ceil(p.length / (w * 1.15))), 0); }
+const ACC = () => DEC ? '#,##0.00_);(#,##0.00);"-"_)' : '#,##0_);(#,##0);"-"_)';
+function nLines(text, w) { return String(text ?? "").split("\n").reduce((n, p) => n + Math.max(1, Math.ceil(p.length / (w * 1.35))), 0); }
 const hFor = (text, w, min = 1) => RH * Math.max(min, nLines(text, w));
 const cell = (c, v, o = {}) => ({ c, v, ...o });
 function addB(x, side, style = "thin") { x.border = { ...(x.border || {}), [side]: { style } }; }
+const PAD = n => String(n).padStart(2, "0");
+// dates as the statements print them: 31/03/2026, 31st March, 2026, 2025/2026
+function FD() {
+  const e = new Date((S.info.fyEnd || "2026-03-31") + "T00:00:00");
+  const p = new Date(e); p.setFullYear(e.getFullYear() - 1);
+  const s = new Date(p); s.setDate(s.getDate() + 1);
+  const ps = new Date(s); ps.setFullYear(s.getFullYear() - 1);
+  const dmy = x => `${PAD(x.getDate())}/${PAD(x.getMonth() + 1)}/${x.getFullYear()}`;
+  const n = e.getDate(), ord = n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th");
+  return { cy: dmy(e), py: dmy(p), cyStart: dmy(s), pyStart: dmy(ps), long: `${ord} ${MONTHS[e.getMonth()]}, ${e.getFullYear()}`,
+    fy: `${s.getFullYear()}/${e.getFullYear()}`, fyPy: `${ps.getFullYear()}/${p.getFullYear()}`, fyShort: `${s.getFullYear()}–${String(e.getFullYear()).slice(-2)}` };
+}
+const OWN = () => ({ Partner: "Partners'", Proprietor: "Proprietor's", Member: "Members'", Trustee: "Trustees'" }[S.info.ownerWord] || "Owners'");
+const nil2 = (cy, py) => Math.abs(num(cy)) < 1e-9 && Math.abs(num(py)) < 1e-9;
 
 class XSheet {
   constructor(wb, name, widths, opt) {
     this.ws = wb.addWorksheet(name, {
       views: [{ zoomScale: 110, zoomScaleNormal: 110, showGridLines: false }],
       pageSetup: { paperSize: 9, orientation: opt.orient, fitToPage: false, scale: 100, horizontalCentered: true,
-        margins: opt.margins, printTitlesRow: opt.titles || undefined },
-      headerFooter: { oddFooter: `&R&"Trebuchet MS,Regular"&8Page &P of &N` },
+        margins: { left: 0.45, right: 0.4, top: 0.5, bottom: 0.5, header: 0, footer: 0 }, printTitlesRow: opt.titles || undefined },
     });
     this.ws.columns = widths.map(w => ({ width: w }));
-    this.W = widths; this.N = widths.length; this.r = 0; this.used = 0; this.avail = opt.avail; this.body = 0;
+    this.W = widths; this.N = widths.length; this.r = 0; this.used = 0; this.avail = opt.avail; this.body = 0; this.titleH = 0;
+    this.titleRows = opt.titles ? +String(opt.titles).split(":")[1] : 0;
   }
-  pageBreak() { if (this.r > this.body) { this.ws.getRow(this.r).addPageBreak(); this.used = 0; } }
+  pageBreak() { if (this.r > this.body) { this.ws.getRow(this.r).addPageBreak(); this.used = this.titleH; } }
   row(spec) {
     const h = spec.h || RH;
     if (this.used + h > this.avail) this.pageBreak();
@@ -1277,7 +1300,7 @@ class XSheet {
       if (c.to && c.to > c.c) this.ws.mergeCells(this.r, c.c, this.r, c.to);
       const x = row.getCell(c.c), isNum = typeof c.v === "number";
       if (c.v !== undefined && c.v !== null && c.v !== "") x.value = c.v;
-      x.font = { name: XF, size: c.sz || 10, bold: !!c.b, italic: !!c.i, underline: !!c.u };
+      x.font = { name: c.font || XF, size: c.sz || 10, bold: !!c.b, italic: !!c.i, underline: !!c.u };
       x.alignment = { vertical: c.va || "top", horizontal: c.al || (isNum ? undefined : "left"), wrapText: !isNum, indent: c.ind || 0 };
       if (isNum) x.numFmt = c.fmt || ACC();
       const last = c.to || c.c;
@@ -1288,7 +1311,6 @@ class XSheet {
         if (c.bb) addB(y, "bottom", c.bb === 2 ? "double" : "thin");
       }
     }
-    // frame: vertical rules of the note's box, plus top/bottom edge
     if (spec.frame) {
       for (const k of spec.frame.l || []) addB(row.getCell(k), "left");
       for (const k of spec.frame.r || []) addB(row.getCell(k), "right");
@@ -1297,291 +1319,422 @@ class XSheet {
       if (spec.bottom) for (let k = a; k <= b; k++) addB(row.getCell(k), "bottom");
     }
     this.used += h;
+    if (this.r === this.titleRows) this.titleH = this.used;
   }
   block(rows) {
     const tot = rows.reduce((a, r) => a + (r.h || RH), 0);
-    // keep a block whole when it fits on a page; a longer one starts on a fresh page unless most of this page is free
-    if (this.used > 0 && this.used + tot > this.avail && (tot <= this.avail || this.avail - this.used < this.avail * 0.4)) this.pageBreak();
+    // keep a block on one page when it fits; a longer one starts on a fresh page unless most of this page is free
+    if (this.used > this.titleH && this.used + tot > this.avail && (tot <= this.avail - this.titleH || this.avail - this.used < this.avail * 0.4)) this.pageBreak();
     rows.forEach(r => this.row(r));
   }
-  gap(h = 10) { if (this.used > 0 && this.used + h <= this.avail) this.row({ h }); }
+  gap(h = 10) { if (this.used > this.titleH && this.used + h <= this.avail) this.row({ h }); }
 }
 function framed(rows, frame) {
   rows.forEach(r => r.frame = frame);
   if (rows.length) { rows[0].top = true; rows[rows.length - 1].bottom = true; }
   return rows;
 }
-
-function sigRows(L, R1, R2) {
-  const i = S.info, ow = i.ownerWord || "Partner", ps = S.partners.filter(p => p.name), out = [];
-  const R = (a, b, o = {}) => [cell(R1, a, { al: "center", ...o }), cell(R2, b, { al: "center", ...o })];
-  out.push({ cells: [cell(L, i.caFirm ? "As per our report of even date" : ""), cell(R1, "For " + i.name, { to: R2, b: true, al: "center" })], h: hFor("For " + i.name, 34) });
-  if (i.caFirm) {
-    out.push({ cells: [cell(L, "For " + i.caFirm, { b: true })] });
-    out.push({ cells: [cell(L, "Chartered Accountants" + (i.frn ? " (FRN " + i.frn + ")" : ""))] });
+// three title lines at the top of every sheet: ENTITY, heading, unit
+function sheetHead(X, heading, opts = {}) {
+  const n = X.N;
+  X.row({ cells: [cell(1, String(S.info.name || "").toUpperCase(), { to: n, b: true, sz: 11, al: "center" })], h: 18 });
+  X.row({ cells: [cell(1, heading, { to: n, b: true, al: opts.left ? "left" : "center", sz: opts.left ? 10 : 10.5 })], h: 18 });
+  X.row({ cells: [cell(Math.max(1, n - (opts.unitSpan || 1)), unitLabel(), { to: n, b: true, al: "right" })] });
+  X.body = X.r;
+}
+// signing block: auditor on the left, the entity and its owners on the right
+function sigRows(L, Lto, pairs, rightSpan) {
+  const i = S.info, ow = i.ownerWord || "Partner", ps = S.partners.filter(p => p.name);
+  const left = i.caFirm ? [[`For, ${i.caFirm}`, 1], ["Chartered Accountants"], [i.frn ? `[FRN ${i.frn}]` : ""], ["", 0, 26], [i.caName || "", 1], [i.caDesig || "Partner"],
+    [i.mno ? `M. No. ${i.mno}` : ""], [i.udin ? `UDIN: ${i.udin}` : ""], [`Place: ${i.place || ""}`], [`Date: ${i.date || ""}`]]
+    : [[""], [""], [""], ["", 0, 26], [""], [""], [""], [""], [`Place: ${i.place || ""}`], [`Date: ${i.date || ""}`]];
+  const right = [[{ t: `For, ${i.name}`, b: 1, span: true }], [], [], []];
+  for (let k = 0; k < Math.max(ps.length, 1); k += pairs.length) {
+    if (k) right.push([], []);
+    right.push(pairs.map((_, j) => ({ t: ps[k + j]?.name || "", b: 1 })));
+    right.push(pairs.map((_, j) => ({ t: ps[k + j] ? ow : "" })));
   }
-  for (let k = 0; k < Math.max(ps.length, 1); k += 2) {
-    out.push({ h: 24 });
-    out.push({ cells: [cell(L, k === 0 ? (i.caName || "") + (i.caFirm ? ", Partner" + (i.mno ? " (M. No. " + i.mno + ")" : "") : "") : "", { b: true }), ...R(ps[k]?.name || "", ps[k + 1]?.name || "", { b: true })] });
-    out.push({ cells: [cell(L, ""), ...R(ps[k] ? ow : "", ps[k + 1] ? ow : "")] });
+  const n = Math.max(left.length, right.length), out = [];
+  for (let r = 0; r < n; r++) {
+    const [lt, lb, lh] = left[r] || [""];
+    const cells = [cell(L, lt, { to: Lto, b: !!lb })];
+    for (const [j, x] of (right[r] || []).entries()) {
+      if (x.span) cells.push(cell(rightSpan[0], x.t, { to: rightSpan[1], b: !!x.b }));
+      else cells.push(cell(pairs[j][0], x.t, { to: pairs[j][1], b: !!x.b }));
+    }
+    out.push({ cells, h: lh || RH });
   }
-  out.push({ cells: [cell(L, "Place: " + (i.place || "") + "      Date: " + (i.date || "")), cell(R1, "Place: " + (i.place || "") + "      Date: " + (i.date || ""), { to: R2, al: "center" })] });
   return out;
 }
 
-/* Balance Sheet / P&L: A tag | B particulars | C note | D current year | E gap | F previous year */
-function xlStatement(wb, kind) {
-  const d = dates(S), bs = kind === "bs";
-  RH = 12.75;
-  const X = mkSheet(wb, bs ? "Balance Sheet" : "Statement of P&L", [6, 48.5, 6.5, 17, 1.2, 17],
-    { orient: "portrait", avail: 780, margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.45, header: 0.2, footer: 0.2 } });
-  X.row({ cells: [cell(1, S.info.name, { to: 6, b: true })] });
-  X.row({ cells: [cell(1, bs ? `Balance Sheet as at ${d.cy}` : `Statement of Profit and Loss for the year ended ${d.cy}`, { to: 6, b: true })] });
-  X.row({ cells: [cell(4, `(Amount in ${S.info.unit})`, { to: 6, b: true, al: "right" })] });
-  const fr = { l: [1, 3, 4, 6], r: [2, 3, 4, 6] };
-  X.row({ h: 15, frame: fr, top: true, bottom: true, cells: [cell(2, "Particulars", { b: true, va: "middle" }), cell(3, "Note", { b: true, al: "center", va: "middle" }),
-    cell(4, d.cy, { b: true, al: "center", va: "middle", box: 1 }), cell(6, d.py, { b: true, al: "center", va: "middle", box: 1 })] });
-  X.body = X.r;
-  X.row({ h: 6, frame: fr });
-  for (const [t, tag, label, note, key] of (bs ? bsRows() : plRows())) {
-    const strong = t === "h" || t === "T";
-    const nt = note ? NN(note) : "";
-    const cells = [cell(1, tag, { b: strong, al: "center" }), cell(2, label, { b: strong, ind: t === "rr" ? 2 : 0 }), cell(3, nt, { al: "center" })];
-    if (key) for (const [i, y] of [[4, "cy"], [6, "py"]]) cells.push(cell(i, num(C[key + "." + y]), { b: strong || t === "s", bt: t === "s" || t === "T" ? 1 : 0, bb: t === "T" ? 2 : t === "s" ? 1 : 0 }));
-    if (t === "h" && !key && X.r > X.body + 1) X.row({ h: 4, frame: fr });
-    X.row({ cells, frame: fr, h: hFor(label, 47) });
+/* ----- Balance Sheet and Statement of Profit and Loss -----
+   A particulars | B note | C,D current year (items, totals) | E,F previous year (items, totals) */
+const SW = [40, 6.5, 12, 12, 12, 12];
+const SFR = { l: [1, 2, 3, 5], r: [6] };
+function bsFace() {
+  const own = OWN();
+  return [
+    { h: "EQUITY AND LIABILITIES" },
+    { g: `${own} Funds:`, key: "of", items: [[`${own} Capital Account`, "n3", "cap"], ["Reserves & Surplus", "n4", "res"]] },
+    { g: "Non Current Liabilities", key: "ncl", items: [["Long Term Borrowings", "n5a", "ltb"], ["Deferred Tax Liabilities (Net)", "n6", "dtl"], ["Other Long Term Liabilities", "n7", "oltl"], ["Long Term Provisions", "n8a", "ltp"]] },
+    { g: "Current Liabilities", key: "cl", items: [["Short Term Borrowings", "n5b", "stb"],
+      ["Trade Payables", "n9", "tp", [["Micro, Small and Medium Enterprises", "creditors.msme", "n9.a.msme"], ["Others", "creditors.oth", "n9.a.oth"]]],
+      ["Other Current Liabilities", "n10", "ocl"], ["Short Term Provisions", "n8b", "stp"]] },
+    { total: "el" },
+    { h: "ASSETS" },
+    { g: "Non Current Assets", key: "nca", items: [["Property, Plant & Equipment and Intangible Assets", "n11", null, [["Property, Plant & Equipment", "bs.ppe"], ["Intangible Assets", "bs.intang"], ["Capital Work-in-Progress", "bs.cwip"], ["Intangible Assets under Development", "bs.iaud"]]],
+      ["Non Current Investments", "n12a", "nci"], ["Deferred Tax Assets (Net)", "n6", "dta"], ["Long Term Loans & Advances", "n13a", "ltla"], ["Other Non Current Assets", "n14", "onca"]] },
+    { g: "Current Assets", key: "ca", items: [["Current Investments", "n12b", "ci"], ["Inventories", "n15", "inv"], ["Trade Receivables", "n16", "tr"], ["Cash & Bank Balances", "n17", "cash"],
+      ["Short Term Loans & Advances", "n13b", "stla"], ["Other Current Assets", "n18", "oca"]] },
+    { total: "as" },
+  ];
+}
+function vv(key, y) { return num(C[`${key}.${y}`]); }
+function stmtSheet(wb, kind) {
+  const d = FD(), bs = kind === "bs", skip = !!S.info.skipNil;
+  RH = 13;
+  const X = mkSheet(wb, bs ? "Balance Sheet" : "Statement of P&L", SW, { orient: "portrait", avail: 770 });
+  sheetHead(X, bs ? `BALANCE SHEET AS AT ${d.long.toUpperCase()}` : `STATEMENT OF PROFIT AND LOSS FOR THE YEAR ENDED ${d.long.toUpperCase()}`, { unitSpan: 1 });
+  const hc = bs ? [`AS AT ${d.cy}`, `AS AT ${d.py}`] : [d.fy, d.fyPy];
+  X.row({ frame: SFR, top: true, bottom: true, cells: [cell(2, "Note", { b: true, al: "center" }), cell(3, hc[0], { to: 4, b: true, al: "center" }), cell(5, hc[1], { to: 6, al: "center" })] });
+  const R = (label, o = {}) => ({ frame: SFR, cells: [cell(1, label, { b: o.b, u: o.u, ind: o.ind || 0, al: o.al }), cell(2, o.note ? NN(o.note) : "", { al: "center" }), ...(o.vals || [])], h: hFor(label, 40) });
+  const val = (col, v, o = {}) => cell(col, num(v), { b: o.b, bt: o.bt, bb: o.bb });
+  const pair = (inner, cyv, pyv, o = {}) => inner ? [val(3, cyv, o), val(5, pyv, o)] : [val(4, cyv, o), val(6, pyv, o)];
+  const grand = (label, cyv, pyv, dbl) => R(label, { b: true, al: "right", vals: [val(4, cyv, { b: true, bt: 1, bb: dbl ? 2 : 1 }), val(6, pyv, { b: true, bt: 1, bb: dbl ? 2 : 1 })] });
+  // a group shows its lines in the item column and its total in the total column; a single line goes straight to the total column
+  const group = (title, leaves, totCy, totPy, keepWhenNil) => {
+    const vis = leaves.filter(l => !skip || l.always || !nil2(l.cy, l.py));
+    if (!vis.length && !keepWhenNil) return;
+    if (title) X.row(R(title, { b: true, u: true }));
+    const nVals = vis.filter(l => !l.labelOnly).length;
+    vis.forEach((l, i) => {
+      const lastVal = vis.slice(i + 1).every(x => x.labelOnly);
+      if (l.labelOnly) { X.row(R(l.label, { ind: l.ind, note: l.note })); return; }
+      X.row(R(l.label, { ind: l.ind, note: l.note, vals: pair(nVals > 1, l.cy, l.py, { bb: nVals > 1 && lastVal ? 1 : 0 }) }));
+    });
+    if (nVals > 1) X.row(R("", { vals: pair(false, totCy, totPy, { b: true }) }));
+  };
+  if (bs) {
+    for (const s of bsFace()) {
+      if (s.h) { X.row(R(s.h, { b: true, u: true })); continue; }
+      if (s.total) { X.row(grand("Total", vv(`bs.${s.total}`, "cy"), vv(`bs.${s.total}`, "py"))); X.row({ frame: SFR, h: 6 }); continue; }
+      const leaves = [];
+      for (const [label, note, key, subs] of s.items) {
+        if (subs) {
+          const subLeaves = subs.map(([sl, sk]) => ({ label: sl, ind: 1, cy: vv(sk, "cy"), py: vv(sk, "py") })).filter(l => !skip || !nil2(l.cy, l.py));
+          const parentNil = subLeaves.every(l => nil2(l.cy, l.py)) && (key ? nil2(vv(`bs.${key}`, "cy"), vv(`bs.${key}`, "py")) : true);
+          if (skip && parentNil) continue;
+          leaves.push({ label, note, labelOnly: true, always: true });
+          subLeaves.forEach(l => leaves.push({ ...l, always: true }));
+          continue;
+        }
+        leaves.push({ label, note, cy: vv(`bs.${key}`, "cy"), py: vv(`bs.${key}`, "py") });
+      }
+      group(s.g, leaves, vv(`bs.${s.key}`, "cy"), vv(`bs.${s.key}`, "py"), true);
+    }
+  } else {
+    const L = (label, note, key) => ({ label, note, cy: vv(`pl.${key}`, "cy"), py: vv(`pl.${key}`, "py") });
+    X.row(R("INCOME", { b: true, u: true }));
+    for (const l of [L("Revenue From Operations", "n19", "rev"), L("Other Income", "n20", "oi")]) if (!skip || !nil2(l.cy, l.py)) X.row(R(l.label, { note: l.note, vals: pair(false, l.cy, l.py) }));
+    X.row(grand("Total Income", vv("pl.ti", "cy"), vv("pl.ti", "py")));
+    X.row({ frame: SFR, h: 6 });
+    X.row(R("EXPENSE", { b: true, u: true }));
+    for (const l of [L("Cost of Goods Sold", "n21", "cogs"), L("Employee Benefit Expense", "n22", "emp"), L("Finance Cost", "n23", "fin"), L("Depreciation and Amortization Expense", "n24", "dep"), L("Other Expense", "n25", "oth")])
+      if (!skip || !nil2(l.cy, l.py)) X.row(R(l.label, { note: l.note, vals: pair(false, l.cy, l.py) }));
+    X.row(grand("Total Expense", vv("pl.exp", "cy"), vv("pl.exp", "py")));
+    X.row({ frame: SFR, h: 6 });
+    const line = (label, key, o = {}) => X.row(R(label, { b: o.b, note: o.note, vals: pair(false, vv(`pl.${key}`, "cy"), vv(`pl.${key}`, "py"), { b: o.b }) }));
+    const has = k => !nil2(vv(`pl.${k}`, "cy"), vv(`pl.${k}`, "py"));
+    if (has("exc") || has("ext")) {
+      line("PROFIT BEFORE EXCEPTIONAL AND EXTRAORDINARY ITEMS AND TAX", "v", { b: true });
+      if (has("exc")) line("Exceptional Items", "exc");
+      if (has("ext")) line("Extraordinary Items", "ext");
+    }
+    if (has("rem")) {
+      line(`PROFIT BEFORE ${S.info.ownerWord === "Partner" || !S.info.ownerWord ? "PARTNERS'" : OWN().toUpperCase()} REMUNERATION AND TAX`, "ix", { b: true });
+      line(`${S.info.ownerWord === "Partner" || !S.info.ownerWord ? "Partners'" : OWN()} Remuneration`, "rem", { note: "n3" });
+    }
+    line("PROFIT BEFORE TAXATION", "pbt", { b: true });
+    X.row({ frame: SFR, h: 6 });
+    const taxLeaves = [{ label: "Current Tax", cy: vv("pl.cur", "cy"), py: vv("pl.cur", "py"), always: true },
+      { label: "Excess / Short Provision of Earlier Years", cy: vv("pl.ey", "cy"), py: vv("pl.ey", "py") },
+      { label: "Deferred Tax Liability / (Assets)", cy: vv("pl.def", "cy"), py: vv("pl.def", "py"), always: true }].filter(l => l.always || !nil2(l.cy, l.py));
+    X.row(R("TAX EXPENSE", { b: true, u: true }));
+    taxLeaves.forEach((l, i) => X.row(R(l.label, { vals: pair(true, l.cy, l.py, { bb: i === taxLeaves.length - 1 ? 1 : 0 }) })));
+    X.row(R("", { vals: pair(false, vv("pl.tax", "cy"), vv("pl.tax", "py"), { b: true }) }));
+    if (has("disc")) {
+      line("PROFIT FROM CONTINUING OPERATIONS", "cont", { b: true });
+      line("Profit / (Loss) from Discontinuing Operations (after tax)", "disc");
+    }
+    X.row(grand("PROFIT FOR THE YEAR", vv("pl.profit", "cy"), vv("pl.profit", "py"), true));
+    X.row({ frame: SFR, h: 6 });
   }
-  X.row({ h: 6, frame: fr });
-  X.row({ frame: fr, cells: [cell(2, "Brief about the Entity"), cell(3, "1", { al: "center" })] });
-  X.row({ frame: fr, cells: [cell(2, "Summary of significant accounting policies"), cell(3, "2", { al: "center" })] });
-  X.row({ h: 4, frame: fr });
-  if (!bs) X.row({ frame: fr, cells: [cell(2, "* wherever applicable", { i: true })] });
-  X.row({ frame: fr, bottom: true, cells: [cell(2, "The accompanying notes are an integral part of the financial statements")], h: hFor("The accompanying notes are an integral part of the financial statements", 47) });
-  X.row({ h: 8 });
-  X.block(sigRows(2, 4, 6));
+  const lastNo = NOTE_COUNT + 2 + S.otherNotes.length;
+  X.row({ frame: SFR, top: true, cells: [cell(1, "Significant Accounting Policies"), cell(2, "1 & 2", { al: "center" })] });
+  X.row({ frame: SFR, bottom: true, cells: [cell(1, "Notes on Financial Statements"), cell(2, `1 to ${lastNo}`, { al: "center" })] });
+  X.row({ cells: [cell(1, S.info.caFirm ? "As per our report of even date attached" : "", { to: 2 })] });
+  X.row({ h: 6 });
+  X.block(sigRows(1, 1, [[3, 4], [5, 6]], [3, 6]));
   RH = 13.5;
 }
 
-/* Notes sheet (portrait): A tag | B particulars | C–G five amount columns; each note boxed with vertical rules */
-const NW = [4.5, 31, 12, 12, 12, 12, 12];
-const LAY = {
-  C2: { to: 5, cols: { cy: 6, py: 7 }, l: [1, 2, 6, 7] },
-  C4: { to: 3, cols: { lt_cy: 4, lt_py: 5, st_cy: 6, st_py: 7 }, l: [1, 2, 4, 5, 6, 7] },
-  INV: { to: 2, cols: { fv: 3, n_cy: 4, cy: 5, n_py: 6, py: 7 }, l: [1, 2, 3, 4, 5, 6, 7] },
-};
-const TXT_W = 91;
-const lblW = to => NW.slice(1, to).reduce((a, b) => a + b, 0);
-const hd = (c, v, o = {}) => cell(c, v, { b: true, al: "center", va: "middle", box: 1, ...o });
-function noteTitle(no, title, extra = [], to = 7) { return { cells: [cell(1, no, { b: true, al: "center" }), cell(2, title, { to, b: true }), ...extra], h: Math.max(28, hFor(title, lblW(to + 1))) }; }
-function noteHead(note) {
-  const d = dates(S), L = LAY[note.cols], no = NN(note.id);
-  if (note.cols === "C2") return [noteTitle(no, note.title, [hd(6, d.cy), hd(7, d.py)], 5)];
-  if (note.cols === "C4") return [noteTitle(no, note.title, [hd(4, "Long term", { to: 5 }), hd(6, "Short term", { to: 7 })], 3),
-    { h: 28, cells: [hd(4, d.cy), hd(5, d.py), hd(6, d.cy), hd(7, d.py)] }];
-  return [noteTitle(no, note.title, [hd(4, d.cy, { to: 5 }), hd(6, d.py, { to: 7 })], 2),
-    { h: 28, cells: [cell(2, note.lead || "", { i: true, va: "middle" }), hd(3, "Face value"), hd(4, "Nos. / units"), hd(5, "Book value"), hd(6, "Nos. / units"), hd(7, "Book value")] }];
+/* ----- Notes: A note no. | B particulars | C–J eight narrow columns (each year: items C:D / G:H, totals E:F / I:J) ----- */
+const NW = [5, 33, 7, 7, 7, 7, 7, 7, 7, 7];
+const SLOT = { cyIn: [3, 4], cyOut: [5, 6], pyIn: [7, 8], pyOut: [9, 10] };
+const NFR = { l: [2, 3, 7], r: [10], span: [2, 10] };
+const sc = (slot, v, o = {}) => cell(slot[0], v, { to: slot[1], ...o });
+function noteHeadRows(no, title, pl) {
+  const d = FD();
+  return [{ cells: [cell(1, no, { b: true, al: "right" }), cell(2, title, { to: 10, b: true, u: true })], h: 16 },
+    { frame: NFR, top: true, bottom: true, cells: [cell(3, pl ? d.fy : `AS AT ${d.cy}`, { to: 6, b: true, al: "center" }), cell(7, pl ? d.fyPy : `AS AT ${d.py}`, { to: 10, al: "center" })] }];
 }
 function noteRows(note) {
-  const L = LAY[note.cols], cols = colsFor(S, note.cols), amt = AMT_COLS[note.cols], lw = lblW(L.to + 1), skip = !!S.info.skipNil;
-  const out = noteHead(note);
-  if (note.lead && note.cols !== "INV") out.push({ cells: [cell(2, note.lead, { to: L.to, i: true })], h: hFor(note.lead, lw) });
-  const totalRow = () => { if (!note.noTotal) out.push({ cells: [cell(2, note.total || "Total", { to: L.to, b: true }), ...amt.map(c => cell(L.cols[c], num(C[`${note.id}.t.${c}`]), { b: true, bt: 1, bb: 2 }))], h: hFor(note.total, lw) }); };
-  let totalDone = false;
-  for (const sec of note.sections) {
-    if (sec.memo && !totalDone) { totalRow(); totalDone = true; }
+  const no = NN(note.id), pl = note.grp === "pl", skip = !!S.info.skipNil, inv = note.cols === "INV";
+  const out = [{ cells: [cell(1, no, { b: true, al: "right" }), cell(2, note.title.replace(/\b\w/g, c => c.toUpperCase()), { to: 10, b: true, u: true })], h: 16 }];
+  const d = FD(), body = [];
+  if (inv) {
+    out.push({ frame: { l: [2, 3, 7], r: [10], span: [2, 10] }, top: true, cells: [cell(3, `AS AT ${d.cy}`, { to: 6, b: true, al: "center", bb: 1 }), cell(7, `AS AT ${d.py}`, { to: 10, al: "center", bb: 1 })] });
+    out.push({ frame: { l: [2, 3, 5, 7, 9], r: [10], span: [2, 10] }, bottom: true, cells: [cell(3, "No. of Units", { to: 4, al: "center" }), cell(5, "Amount", { to: 6, al: "center" }), cell(7, "No. of Units", { to: 8, al: "center" }), cell(9, "Amount", { to: 10, al: "center" })] });
+  } else out.push(noteHeadRows(no, "", pl)[1]);
+  const fr = inv ? { l: [2, 3, 5, 7, 9], r: [10], span: [2, 10] } : NFR;
+  if (note.lead) body.push({ cells: [cell(2, note.lead, { i: true })], h: hFor(note.lead, 33) });
+  const secs = note.sections.filter(sec => !sec.memo);
+  // pick the visible lines of each section
+  const plan = secs.map(sec => {
     const rows = rowsOf(note, sec).map(row => {
       if (row.h) return { row };
-      const zero = amt.every(c => Math.abs(C[`${note.id}.${sec.id}.${row.k}.${c}`] || 0) < 1e-9) && cols.filter(c => c.text).every(c => !getV(note.id, sec.id + "." + row.k, c.k));
+      const zero = ["cy", "py"].every(c => Math.abs(C[`${note.id}.${sec.id}.${row.k}.${c}`] || 0) < 1e-9) && (!inv || ["n_cy", "n_py"].every(c => !getV(note.id, sec.id + "." + row.k, c)));
       return { row, zero };
     });
     rows.forEach((x, i) => { if (x.row.h) { let j = i + 1, any = false; while (j < rows.length && !rows[j].row.h) { if (!rows[j].zero) any = true; j++; } x.zero = !any; } });
-    const keep = rows.filter(x => !skip || !x.zero);
-    if (skip && !keep.length && amt.every(c => Math.abs(C[`${note.id}.s.${sec.id}.${c}`] || 0) < 1e-9)) continue;
-    if (sec.title) { out.push({ h: 5 }); out.push({ cells: [cell(2, sec.title, { to: L.to, b: true, u: !sec.memo, i: !!sec.memo })], h: hFor(sec.title, lw) }); }
-    for (const { row } of keep) {
-      if (row.h) { out.push({ cells: [cell(1, row.tag || "", { al: "center" }), cell(2, row.h, { to: L.to, b: true })], h: hFor(row.h, lw) }); continue; }
-      const label = row.label || "Others (specify nature)";
-      const cells = [cell(1, row.tag || "", { al: "center" }), cell(2, label, { to: L.to, ind: row.indent ? 1 : 0 })];
-      for (const c of cols) {
-        const ci = L.cols[c.k];
-        if (row.na?.includes(c.k)) cells.push(cell(ci, "NA", { al: "center" }));
-        else if (c.text) cells.push(cell(ci, String(getV(note.id, sec.id + "." + row.k, c.k) || ""), { al: "right" }));
-        else cells.push(cell(ci, num(C[`${note.id}.${sec.id}.${row.k}.${c.k}`])));
+    return { sec, rows: rows.filter(x => !skip || !x.zero) };
+  }).filter(p => p.rows.length || !skip);
+  const multi = plan.length > 1;
+  for (const { sec, rows } of plan) {
+    const vals = rows.filter(x => !x.row.h);
+    const inner = !inv && multi && vals.length > 1;     // several lines under a heading: lines in the item column, total beside them
+    if (sec.title) body.push({ cells: [cell(2, sec.title, { b: true, u: true })], h: hFor(sec.title, 33) });
+    rows.forEach((x, i) => {
+      const row = x.row, label = row.h || row.label || "Others (specify nature)";
+      if (row.h) { body.push({ cells: [cell(2, label, { u: true, ind: row.indent ? 1 : 0 })], h: hFor(label, 33) }); return; }
+      const lastVal = rows.slice(i + 1).every(y => y.row.h);
+      const g = c => num(C[`${note.id}.${sec.id}.${row.k}.${c}`]);
+      const cells = [cell(2, label, { ind: row.indent ? 1 : 0 })];
+      if (inv) {
+        if (row.na?.includes("n_cy")) cells.push(sc([3, 4], "NA", { al: "center" })); else cells.push(sc([3, 4], String(getV(note.id, sec.id + "." + row.k, "n_cy") || ""), { al: "right" }));
+        cells.push(sc([5, 6], g("cy")));
+        if (row.na?.includes("n_py")) cells.push(sc([7, 8], "NA", { al: "center" })); else cells.push(sc([7, 8], String(getV(note.id, sec.id + "." + row.k, "n_py") || ""), { al: "right" }));
+        cells.push(sc([9, 10], g("py")));
+      } else {
+        cells.push(sc(inner ? SLOT.cyIn : SLOT.cyOut, g("cy"), { bb: inner && lastVal ? 1 : 0 }), sc(inner ? SLOT.pyIn : SLOT.pyOut, g("py"), { bb: inner && lastVal ? 1 : 0 }));
       }
-      out.push({ cells, h: hFor(label, lw) });
-    }
-    if (!sec.noSub && !sec.memo) out.push({ cells: [cell(2, sec.total ?? "Total", { to: L.to, b: true }), ...amt.map(c => cell(L.cols[c], num(C[`${note.id}.s.${sec.id}.${c}`]), { b: true, bt: 1, bb: 1 }))], h: hFor(sec.total, lw) });
+      body.push({ cells, h: hFor(label, 33) });
+    });
+    if (inner || (inv && multi && vals.length)) body.push({ cells: [sc(inv ? [5, 6] : SLOT.cyOut, num(C[`${note.id}.s.${sec.id}.cy`]), { b: true, bt: inv ? 1 : 0 }), sc(inv ? [9, 10] : SLOT.pyOut, num(C[`${note.id}.s.${sec.id}.py`]), { b: true, bt: inv ? 1 : 0 })] });
+    if (multi) body.push({ h: 5 });
   }
-  if (!totalDone) totalRow();
-  if (note.parties && S.parties[note.parties].length) out.push({ cells: [cell(2, `Refer party-wise details in the sheet "${PARTY[note.parties].sheet}".`, { to: L.to, i: true })] });
+  if (!note.noTotal) body.push({ cells: [cell(2, "Total", { b: true, al: "right" }), sc(inv ? [5, 6] : SLOT.cyOut, num(C[`${note.id}.t.cy`]), { b: true, bt: 1, bb: 1 }), sc(inv ? [9, 10] : SLOT.pyOut, num(C[`${note.id}.t.py`]), { b: true, bt: 1, bb: 1 })] });
+  out.push(...framed(body, fr));
   if (S.text[note.id]) {
-    out.push({ h: 5 });
-    if (note.footLabel) out.push({ cells: [cell(2, note.footLabel.replace(/^./, c => c.toUpperCase()).replace(/ b/, " B"), { to: L.to, b: true, u: true })] });
-    out.push(...footRows(S.text[note.id], L.to));
+    out.push({ h: 4 });
+    if (note.footLabel) out.push({ cells: [cell(2, note.footLabel.replace(/\b\w/g, c => c.toUpperCase()), { to: 10, b: true, u: true })] });
+    String(S.text[note.id]).split("\n").filter(Boolean).forEach(p => out.push({ cells: [cell(2, p, { to: 10 })], h: hFor(p, 89) }));
   }
-  out.push({ h: 5 });
-  return framed(out, { l: L.l, r: [7] });
+  return out;
 }
-function footRows(text, to = 7) { return String(text).split("\n").filter(Boolean).map(p => ({ cells: [cell(2, p, { to, i: true })], h: hFor(p, lblW(to + 1) * 0.85) })); }
-function textNote(no, title, text) {
-  const rows = [{ cells: [cell(1, no, { b: true, al: "center" }), cell(2, title, { to: 7, b: true })], h: 16 }];
+// sub-notes such as 10.1 MSME details and the ageing schedules
+function subNotes(note) {
+  const no = NN(note.id), d = FD(), pl = note.grp === "pl", blocks = [];
+  let k = 0;
+  for (const sec of note.sections.filter(s => s.memo && !s.noPrint)) {
+    k++;
+    const rows = rowsOf(note, sec);
+    const out = [{ cells: [cell(1, `${no}.${k}`, { b: true, al: "right" }), cell(2, sec.subTitle || sec.title, { to: 10 })], h: hFor(sec.subTitle || sec.title, 85) }];
+    const body = [{ cells: [cell(2, "Particulars", { b: true, al: "center" }), cell(3, pl ? d.fy : `As at ${d.cy}`, { to: 6, al: "center", b: true }), cell(7, pl ? d.fyPy : `As at ${d.py}`, { to: 10, al: "center" })], bottom: true }];
+    for (const r of rows) {
+      if (r.h) { body.push({ cells: [cell(2, r.h)], h: hFor(r.h, 33) }); continue; }
+      body.push({ cells: [cell(2, r.label, { ind: r.indent ? 1 : 0 }), sc(SLOT.cyOut, num(C[`${note.id}.${sec.id}.${r.k}.cy`])), sc(SLOT.pyOut, num(C[`${note.id}.${sec.id}.${r.k}.py`]))], h: hFor(r.label, 33) });
+    }
+    framed(body, NFR); body[0].bottom = true;
+    blocks.push([...out, ...body]);
+  }
+  if (note.parties && S.parties[note.parties].length) {
+    k++;
+    const deb = note.parties === "debtors";
+    const cols = deb ? AGE_DEB : AGE_CRED;
+    const rowsDef = deb ? [["u", "good", "(i) Undisputed – considered good"], ["u", "bad", "(ii) Undisputed – considered doubtful"], ["d", "good", "(iii) Disputed – considered good"], ["d", "bad", "(iv) Disputed – considered doubtful"]]
+      : [["u", "m", "(i) MSME"], ["u", "o", "(ii) Others"], ["d", "m", "(iii) Disputed dues – MSME"], ["d", "o", "(iv) Disputed dues – Others"]];
+    // columns C..J: each ageing bucket in one narrow column, Total in the last pair
+    const pos = deb ? [[3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 8], [9, 10]] : [[3, 4], [5, 5], [6, 6], [7, 7], [8, 8], [9, 10]];
+    const heads = [...cols.map(c => c[1].replace("Less than ", "< ").replace("More than ", "> ")), "Total"];
+    const tbl = y => {
+      const title = deb ? "Trade Receivables Ageing Schedule" : "Trade Payables Ageing Schedule";
+      const out = y === "cy" ? [{ cells: [cell(1, `${no}.${k}`, { b: true, al: "right" }), cell(2, title + ":", { to: 10, b: true })] }] : [{ h: 6 }];
+      const fr = { l: [2, ...pos.map(p => p[0])], r: [10], span: [2, 10] };
+      const body = [
+        { cells: [cell(2, "Particulars", { b: true }), cell(3, `As at ${y === "cy" ? d.cy : d.py}`, { to: 10, b: y === "cy", al: "center", bb: 1 })], frame: { l: [2, 3], r: [10], span: [2, 10] } },
+        { cells: [cell(3, "Outstanding for following periods from due date of payment", { to: 10, al: "center", bb: 1, sz: 9 })], frame: { l: [2, 3], r: [10], span: [2, 10] }, h: hFor("Outstanding for following periods from due date of payment", 56) },
+        { cells: heads.map((t, i) => cell(pos[i][0], t, { to: pos[i][1], al: "center", sz: 9, bb: 1 })), frame: fr, h: 26 },
+      ];
+      for (const [dsp, kind, label] of rowsDef) {
+        const base = `ag.${note.parties}.${y}.${dsp}${kind}`;
+        body.push({ frame: fr, cells: [cell(2, label, { sz: 9 }), ...cols.map((c, i) => cell(pos[i][0], num(C[`${base}.${c[0]}`]), { to: pos[i][1], sz: 9 })), cell(pos[pos.length - 1][0], num(C[`${base}.T`]), { to: 10, sz: 9 })] });
+      }
+      body[0].top = true; body[body.length - 1].bottom = true;
+      return [...out, ...body];
+    };
+    blocks.push(tbl("cy")); blocks.push(tbl("py"));
+  }
+  return blocks;
+}
+function textNote(no, title, text, lettered) {
+  const out = [{ cells: [cell(1, no + ".", { b: true, al: "right" }), cell(2, title, { to: 10, b: true, u: true })], h: 16 }];
   for (const line of String(text || "").split("\n")) {
-    if (!line.trim()) { rows.push({ h: 5 }); continue; }
-    const head = /^\s*\d+(\.\d+)+\s/.test(line) && line.length < 80;
-    rows.push({ cells: [cell(2, line, { to: 7, b: head })], h: hFor(line, TXT_W) });
+    if (!line.trim()) { out.push({ h: 6 }); continue; }
+    const m = lettered && line.match(/^\s*(\[[A-Z]\]|\d+(?:\.\d+)+)\s+(.*)$/);
+    if (m && line.length < 90) { out.push({ cells: [cell(2, m[1] + "   " + m[2], { to: 10, b: true, u: true, ind: 1 })] }); continue; }
+    out.push({ cells: [cell(2, line, { to: 10, ind: lettered ? 3 : 0 })], h: hFor(line, lettered ? 82 : 89) });
   }
-  rows.push({ h: 5 });
-  return framed(rows, { l: [1, 2], r: [7] });
+  return out;
 }
-// Notes 3 and 11 sit in the Notes sheet as summaries; the full schedules get their own sheets
-function refNote(no, title, ref, lines) {
-  const d = dates(S);
-  const rows = [noteTitle(no, title, [hd(6, d.cy), hd(7, d.py)], 5)];
-  for (const [l, cy, py, strong] of lines) rows.push({ cells: [cell(2, l, { to: 5, b: !!strong }), cell(6, num(cy), { b: !!strong, bt: strong ? 1 : 0, bb: strong ? 2 : 0 }), cell(7, num(py), { b: !!strong, bt: strong ? 1 : 0, bb: strong ? 2 : 0 })] });
-  rows.push({ cells: [cell(2, ref, { to: 5, i: true })] });
-  rows.push({ h: 5 });
-  return framed(rows, { l: [1, 2, 6, 7], r: [7] });
+function refRow(no, title, ref) {
+  return [{ cells: [cell(1, no, { b: true, al: "right" }), cell(2, title, { to: 10, b: true, u: true })], h: 16 }, { cells: [cell(2, ref, { to: 10, i: true })] }];
 }
-function schedSheet(wb, name, widths, orient) {
-  const X = mkSheet(wb, name, widths, { orient, avail: orient === "landscape" ? 470 : 760,
-    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } });
-  const n = widths.length, d = dates(S);
-  X.row({ cells: [cell(1, S.info.name, { to: n, b: true, sz: 11, al: "center" })], h: 16 });
-  X.row({ cells: [cell(1, `Notes forming part of the Financial Statements for the year ended ${d.cy}`, { to: n, b: true, al: "center" })], h: 15 });
+function notesSheet(wb) {
+  const d = FD();
+  const X = mkSheet(wb, "Notes", NW, { orient: "portrait", avail: 760, titles: "1:3" });
+  sheetHead(X, `Notes on Financial Statements for the Year ended ${d.long}`, { left: true, unitSpan: 3 });
+  X.block(textNote("1", "Entity Overview", S.info.about));
+  X.gap();
+  const pol = textNote("2", "Significant Accounting Policies:", S.info.policies, true);
+  let chunk = [];
+  for (const r of pol) { if (r.cells?.[0]?.u && chunk.length) { X.block(chunk); chunk = []; } chunk.push(r); }
+  if (chunk.length) X.block(chunk);
+  X.gap();
+  for (const id of NOTE_ORDER.filter(id => NOTE_NO[id])) {
+    if (id === "n3") X.block(refRow(NN(id), `${OWN()} Capital Account`, "Refer schedule annexed."));
+    else if (id === "n11") X.block(refRow(NN(id), "Property, Plant & Equipment", "Refer schedule annexed."));
+    else { X.block(noteRows(NOTE_BY[id])); for (const b of subNotes(NOTE_BY[id])) X.block(b); }
+    X.gap(12);
+  }
+  S.otherNotes.forEach((n, i) => {
+    const no = String(NOTE_COUNT + 3 + i);
+    const rows = n.title ? [{ cells: [cell(1, no, { b: true, al: "right" }), cell(2, n.title + ":", { to: 10, b: true })], h: 16 }] : [];
+    String(n.text || "").split("\n").filter(Boolean).forEach((p, j) => rows.push({ cells: [cell(1, !n.title && j === 0 ? no : "", { b: true, al: "right" }), cell(2, p, { to: 10 })], h: hFor(p, 89) }));
+    X.block(rows); X.gap(8);
+  });
+  const lastNo = NOTE_COUNT + 2 + S.otherNotes.length;
   X.row({ h: 8 });
+  X.block([{ cells: [cell(1, `Signature to Note "1" to "${lastNo}"`, { to: 10, b: true, al: "center" })] }, { h: 10 }, ...sigRows(1, 2, [[4, 6], [8, 10]], [4, 10])]);
+}
+
+/* ----- Annexed schedules ----- */
+function schedSheet(wb, name, widths, orient, noteNo, title) {
+  const X = mkSheet(wb, name, widths, { orient, avail: orient === "landscape" ? 500 : 760, titles: "1:3" });
+  sheetHead(X, `Notes on Financial Statements for the Year ended ${FD().long}`, { left: true, unitSpan: 2 });
+  X.row({ cells: [cell(1, `${noteNo}  ${title}`, { to: widths.length, b: true, u: true })], h: 16 });
   return X;
 }
-function fyDates() {
-  const t = new Date((S.info.fyEnd || "2026-03-31") + "T00:00:00"), st = new Date(t);
-  st.setFullYear(t.getFullYear() - 1); st.setDate(st.getDate() + 1);
-  const f = x => `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}/${x.getFullYear()}`;
-  return { start: f(st), end: f(t) };
-}
-// Capital account: one row per partner, Total, then the previous year in one line
-function xlCapital(wb) {
-  const ow = S.info.ownerWord || "Partner";
-  const X = schedSheet(wb, "Capital Account", [5, 28, 10, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5], "landscape");
-  X.row({ cells: [cell(1, "Note - " + NN("n3"), { to: 3, b: true, u: true }), cell(8, `(Amount in ${S.info.unit})`, { to: 10, b: true, al: "right" })] });
-  X.row({ cells: [cell(1, `${ow}s' Capital Account`, { to: 6, b: true })] });
-  X.body = X.r;
-  const H = ["Sr. No.", `Name of ${ow}`, "Share in Profit/Loss", "Opening Balance", "Addition During the year", "Withdrawal during the year", "Interest on Capital", `${ow}s Remuneration`, "Profit/Loss", "Closing Balance"];
+function capitalSheet(wb) {
+  const ow = S.info.ownerWord || "Partner", d = FD();
+  const X = schedSheet(wb, "Capital Account", [5, 28, 10, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5], "landscape", NN("n3"), `${OWN()} Capital Account`);
+  const H = ["Sr. No.", `Name of ${ow}`, "Share in Profit / Loss", `Opening Balance ${d.cyStart}`, "Addition during the Year", "Withdrawal during the Year", "Interest on Capital", `${ow}s' Remuneration`, "Profit / (Loss)", `Closing Balance ${d.cy}`];
   const all = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  X.row({ h: 44, frame: { l: all, r: [10] }, top: true, bottom: true, cells: H.map((t, i) => cell(i + 1, t, { b: true, al: "center", va: "middle" })) });
-  S.partners.forEach((p, i) => {
-    X.row({ frame: { l: all, r: [10] }, h: Math.max(16, hFor(p.name, 27)), cells: [cell(1, i + 1, { al: "center", fmt: "0" }), cell(2, p.name || ""), cell(3, num(p.share) / 100, { fmt: "0.00%" }),
-      ...["open", "intro", "wd", "int", "rem"].map((f, j) => cell(4 + j, num(p.cy[f]))), cell(9, num(C[`p.${p.id}.share.cy`])), cell(10, num(C[`p.${p.id}.close.cy`]))] });
-  });
+  X.row({ h: 42, frame: { l: all, r: [10] }, top: true, bottom: true, cells: H.map((t, i) => cell(i + 1, t, { b: true, al: "center", va: "middle" })) });
+  S.partners.forEach((p, i) => X.row({ frame: { l: all, r: [10] }, h: Math.max(16, hFor(p.name, 27)), cells: [cell(1, i + 1, { al: "center", fmt: "0" }), cell(2, p.name || ""), cell(3, num(p.share) / 100, { fmt: "0.00%" }),
+    ...["open", "intro", "wd", "int", "rem"].map((f, j) => cell(4 + j, num(p.cy[f]))), cell(9, num(C[`p.${p.id}.share.cy`])), cell(10, num(C[`p.${p.id}.close.cy`]))] }));
   const K = ["open", "intro", "wd", "int", "rem", "share", "close"];
-  X.row({ frame: { l: all, r: [10] }, top: true, bottom: true, cells: [cell(1, "Total", { to: 2, b: true, al: "center" }), cell(3, num(C["p.shareT.cy"]) / 100, { b: true, fmt: "0.00%" }),
-    ...K.map((f, j) => cell(4 + j, num(C[`p.T.${f}.cy`]), { b: true }))] });
-  X.row({ frame: { l: [1, 3, 4, 5, 6, 7, 8, 9, 10], r: [10] }, bottom: true, cells: [cell(1, "Previous Year", { to: 2, al: "center" }),
-    ...K.map((f, j) => cell(4 + j, num(C[`p.T.${f}.py`])))] });
-  if (S.text.n3) { X.row({ h: 8 }); String(S.text.n3).split("\n").filter(Boolean).forEach(t => X.row({ cells: [cell(1, t, { to: 10, i: true })], h: hFor(t, 140) })); }
+  X.row({ frame: { l: all, r: [10] }, top: true, bottom: true, cells: [cell(1, "Total", { to: 2, b: true, al: "right" }), cell(3, num(C["p.shareT.cy"]) / 100, { b: true, fmt: "0.00%" }), ...K.map((f, j) => cell(4 + j, num(C[`p.T.${f}.cy`]), { b: true }))] });
+  X.row({ frame: { l: [1, 3, 4, 5, 6, 7, 8, 9, 10], r: [10] }, bottom: true, cells: [cell(1, "Previous Year", { to: 2, al: "right" }), ...K.map((f, j) => cell(4 + j, num(C[`p.T.${f}.py`])))] });
+  if (S.text.n3) { X.row({ h: 8 }); String(S.text.n3).split("\n").filter(Boolean).forEach(t => X.row({ cells: [cell(1, t, { to: 10 })], h: hFor(t, 130) })); }
 }
-// Fixed assets: Income-tax style W.D.V. schedule with a previous-year line
-function xlFixedAssets(wb) {
-  const fy = fyDates(), skip = !!S.info.skipNil;
-  const X = schedSheet(wb, "Fixed Assets", [17.5, 7, 11.5, 10.5, 10, 11.5, 12.5, 11.5], "portrait");
-  X.row({ cells: [cell(1, "Note - " + NN("n11"), { b: true, u: true }), cell(6, `(Amount in ${S.info.unit})`, { to: 8, b: true, al: "right" })] });
-  X.row({ cells: [cell(1, "Fixed Assets", { to: 3, b: true })] });
-  X.body = X.r;
-  const all = [1, 2, 3, 4, 5, 6, 7, 8], fr = { l: all, r: [8] };
-  X.row({ frame: { l: [1, 2, 3, 7, 8], r: [8] }, top: true, cells: [cell(1, "Particulars", { b: true, al: "center" }), cell(2, "% of", { b: true, al: "center", va: "bottom" }),
-    cell(3, "Gross Block", { to: 6, b: true, al: "center", bb: 1 }), cell(7, "Depreciation", { b: true, al: "center", bb: 1 }), cell(8, "Net Block", { b: true, al: "center", bb: 1 })] });
-  X.row({ h: 42, frame: fr, bottom: true, cells: [cell(2, "Deprn.", { b: true, al: "center" }), cell(3, `Opg. Bal. ${fy.start}`, { b: true, al: "center" }), cell(4, "Addition during the year", { b: true, al: "center" }),
-    cell(5, "Sale/adj. during the year", { b: true, al: "center" }), cell(6, `Clg. Bal. ${fy.end}`, { b: true, al: "center" }), cell(7, "Provided during the year", { b: true, al: "center" }), cell(8, `W. D. V. as on ${fy.end}`, { b: true, al: "center" })] });
+// W.D.V. schedule laid out like a Property, Plant & Equipment note: gross block, depreciation, net block for both years
+function fixedAssetSheet(wb) {
+  const d = FD(), skip = !!S.info.skipNil;
+  const X = schedSheet(wb, "Fixed Assets", [30, 8, 14, 14, 14, 14, 14, 14, 14], "landscape", NN("n11"), "Property, Plant & Equipment");
+  const all = [1, 2, 3, 4, 5, 6, 7, 8, 9], fr = { l: all, r: [9] };
+  X.row({ frame: { l: [1, 2, 3, 7, 8], r: [9] }, top: true, cells: [cell(1, "ASSETS", { al: "center", va: "middle" }), cell(2, "Rate (%)", { al: "center" }), cell(3, "GROSS BLOCK", { to: 6, al: "center", bb: 1 }), cell(7, "DEPRECIATION", { al: "center", bb: 1 }), cell(8, "NET BLOCK", { to: 9, al: "center", bb: 1 })] });
+  X.row({ h: 42, frame: fr, bottom: true, cells: [cell(3, `As on ${d.cyStart}`, { al: "center" }), cell(4, "Addition during the Year", { al: "center" }), cell(5, "Sale / Adjustments during the Year", { al: "center" }),
+    cell(6, `As on ${d.cy}`, { al: "center" }), cell(7, "For the Year", { al: "center" }), cell(8, `As on ${d.cy}`, { al: "center" }), cell(9, `As on ${d.py}`, { al: "center" })] });
   const list = S.fa.assets.filter(a => FA_F.some(f => num(a[f])) || (!skip && a.name));
   const both = list.some(a => a.kind === "i") && list.some(a => a.kind !== "i");
-  const groups = both ? [["Tangible assets", list.filter(a => a.kind !== "i")], ["Intangible assets", list.filter(a => a.kind === "i")]] : [["", list]];
-  const KS = ["open", "add", "sale", "close", "dep", "wdv"];
+  const groups = both ? [["Tangible Assets", list.filter(a => a.kind !== "i")], ["Intangible Assets", list.filter(a => a.kind === "i")]] : [["", list]];
   for (const [g, items] of groups) {
     if (g) X.row({ frame: fr, cells: [cell(1, g, { b: true, u: true })] });
-    for (const a of items) X.row({ frame: fr, h: Math.max(16, hFor(a.name, 21)), cells: [cell(1, a.name || ""), cell(2, num(a.rate), { fmt: "General", al: "center" }),
-      ...KS.map((k, j) => cell(3 + j, num(C[`fa.${a.id}.${k}`])))] });
+    for (const a of items) X.row({ frame: fr, h: Math.max(17, hFor(a.name, 30)), cells: [cell(1, a.name || ""), cell(2, num(a.rate), { fmt: "0.##", al: "center" }),
+      ...["open", "add", "sale", "close", "dep", "wdv"].map((k, j) => cell(3 + j, num(C[`fa.${a.id}.${k}`]), { b: k === "close" || k === "wdv" })), cell(9, num(C[`fa.${a.id}.open`]))] });
   }
-  X.row({ frame: fr, top: true, bottom: true, cells: [cell(1, "Total", { b: true, al: "center" }), ...KS.map((k, j) => cell(3 + j, num(C["fa.T." + k]), { b: true }))] });
-  X.row({ frame: { l: [1, 3, 4, 5, 6, 7, 8], r: [8] }, bottom: true, cells: [cell(1, "Previous Year", { to: 2, al: "center" }), ...KS.map((k, j) => cell(3 + j, num(C["fa.py." + k])))] });
-  X.row({ h: 8 });
+  X.row({ frame: fr, top: true, bottom: true, cells: [cell(1, "Total", { b: true, al: "right" }), ...["open", "add", "sale", "close", "dep", "wdv"].map((k, j) => cell(3 + j, num(C["fa.T." + k]), { b: true })), cell(9, num(C["fa.T.open"]), { b: true })] });
+  X.row({ frame: { l: [1, 3, 4, 5, 6, 7, 8, 9], r: [9] }, bottom: true, cells: [cell(1, "Previous Year", { to: 2, al: "right" }), ...["open", "add", "sale", "close", "dep", "wdv"].map((k, j) => cell(3 + j, num(C["fa.py." + k]))), cell(9, num(C["fa.py.open"]))] });
+  X.row({ h: 6 });
   const note = "Depreciation is provided on the written down value method at the rates prescribed under the Income-tax Act, 1961. Additions put to use for less than 180 days during the year are depreciated at half the rate.";
-  X.row({ cells: [cell(1, note, { to: 8, i: true })], h: hFor(note, 95) });
+  X.row({ cells: [cell(1, note, { to: 9, i: true })], h: hFor(note, 140) });
   const wip = ["cwip", "iaud"].filter(w => !skip || ["open", "add_cy", "cap_cy", "add_py", "cap_py"].some(f => num(S[w][f])));
   if (wip.length) {
-    const d = dates(S), wf = { l: [1, 7, 8], r: [8] };
     X.row({ h: 10 });
-    X.row({ h: 28, frame: wf, top: true, bottom: true, cells: [cell(1, "Particulars", { to: 6, b: true, va: "middle" }), cell(7, d.cy, { b: true, al: "center", va: "middle" }), cell(8, d.py, { b: true, al: "center", va: "middle" })] });
+    const wf = { l: [1, 6, 8], r: [9], span: [1, 9] };
+    X.row({ frame: wf, top: true, bottom: true, cells: [cell(1, "Particulars", { to: 5, b: true }), cell(6, `As at ${d.cy}`, { to: 7, b: true, al: "center" }), cell(8, `As at ${d.py}`, { to: 9, al: "center" })] });
     for (const w of wip) {
-      X.row({ frame: wf, cells: [cell(1, w === "cwip" ? "Capital work-in-progress" : "Intangible assets under development", { to: 6, b: true, u: true })] });
-      for (const [l, a, b] of [["Opening balance", C[w + ".open_cy"], C[w + ".open_py"]], ["Add: Additions during the year", S[w].add_cy, S[w].add_py], ["Less: Capitalised during the year", S[w].cap_cy, S[w].cap_py]])
-        X.row({ frame: wf, cells: [cell(1, l, { to: 6, ind: 1 }), cell(7, num(a)), cell(8, num(b))] });
-      X.row({ frame: wf, cells: [cell(1, "Closing balance", { to: 6, b: true, ind: 1 }), cell(7, num(C[w + ".close_cy"]), { b: true, bt: 1, bb: 2 }), cell(8, num(C[w + ".close_py"]), { b: true, bt: 1, bb: 2 })] });
+      X.row({ frame: wf, cells: [cell(1, w === "cwip" ? "Capital Work-in-Progress" : "Intangible Assets under Development", { to: 5, b: true, u: true })] });
+      for (const [l, a, b] of [["Opening Balance", C[w + ".open_cy"], C[w + ".open_py"]], ["Add: Additions during the year", S[w].add_cy, S[w].add_py], ["Less: Capitalised during the year", S[w].cap_cy, S[w].cap_py]])
+        X.row({ frame: wf, cells: [cell(1, l, { to: 5 }), cell(6, num(a), { to: 7 }), cell(8, num(b), { to: 9 })] });
+      X.row({ frame: wf, cells: [cell(1, "Closing Balance", { to: 5, b: true, al: "right" }), cell(6, num(C[w + ".close_cy"]), { to: 7, b: true, bt: 1 }), cell(8, num(C[w + ".close_py"]), { to: 9, b: true, bt: 1 })] });
     }
     X.row({ frame: wf, bottom: true, h: 5 });
   }
-  if (S.text.n11) { X.row({ h: 8 }); String(S.text.n11).split("\n").filter(Boolean).forEach(t => X.row({ cells: [cell(1, t, { to: 8, i: true })], h: hFor(t, 95) })); }
+  if (S.text.n11) { X.row({ h: 8 }); String(S.text.n11).split("\n").filter(Boolean).forEach(t => X.row({ cells: [cell(1, t, { to: 9 })], h: hFor(t, 140) })); }
 }
-// Party-wise debtors / creditors: one line per party, grouped as entered, with a total
-function xlParties(wb, kind) {
+function partySheet(wb, kind) {
   const list = S.parties[kind]; if (!list.length) return;
-  const deb = kind === "debtors", d = dates(S);
-  const X = schedSheet(wb, PARTY[kind].sheet, deb ? [5, 34, 17, 15, 12.5, 12.5] : [5, 38, 18, 9, 12.5, 12.5], "portrait");
-  X.row({ cells: [cell(1, "Note - " + NN(PARTY[kind].note), { to: 2, b: true, u: true }), cell(4, `(Amount in ${S.info.unit})`, { to: 6, b: true, al: "right" })] });
-  X.row({ cells: [cell(1, deb ? "Trade Receivables – party-wise details" : "Trade Payables – party-wise details", { to: 6, b: true })] });
-  X.body = X.r;
+  const deb = kind === "debtors", d = FD(), AG = Object.fromEntries((deb ? AGE_DEB : AGE_CRED));
+  const X = schedSheet(wb, PARTY[kind].sheet, [5, 34, 18, 13, 13, 13], "portrait", NN(PARTY[kind].note), deb ? "Trade Receivables – Party-wise Details" : "Trade Payables – Party-wise Details");
   const all = [1, 2, 3, 4, 5, 6], fr = { l: all, r: [6] };
-  X.row({ h: 28, frame: fr, top: true, bottom: true, cells: ["Sr. No.", "Name of Party", "Group", deb ? "Outstanding for" : "MSME", "Amount " + d.cy, "Amount " + d.py].map((t, i) => cell(i + 1, t, { b: true, al: "center", va: "middle" })) });
-  // keep parties of one group together, in the order the groups first appear
+  X.row({ h: 28, frame: fr, top: true, bottom: true, cells: ["Sr. No.", "Name of Party", "Group", deb ? "Ageing" : "MSME", `AS AT ${d.cy}`, `AS AT ${d.py}`].map((t, i) => cell(i + 1, t, { b: true, al: "center", va: "middle" })) });
   const order = [...new Set(list.map(p => p.grp || ""))];
   const sorted = order.flatMap(g => list.filter(p => (p.grp || "") === g));
-  const ageTxt = p => (p.age === "gt6" ? "> 6 months" : "< 6 months") + (p.st === "doubt" ? " (doubtful)" : p.st === "sec" ? " (secured)" : "");
-  sorted.forEach((p, i) => X.row({ frame: fr, h: Math.max(RH, hFor(p.name, 34), hFor(p.grp, 17)), cells: [cell(1, i + 1, { al: "center", fmt: "0" }), cell(2, p.name || ""), cell(3, p.grp || ""),
-    cell(4, deb ? ageTxt(p) : (p.msme === "yes" ? "Yes" : "No"), { al: "center" }), cell(5, num(p.cy)), cell(6, num(p.py))] }));
-  X.row({ frame: fr, top: true, bottom: true, cells: [cell(1, "Total", { to: 4, b: true, al: "center" }), cell(5, num(C[`${kind}.T.cy`]), { b: true }), cell(6, num(C[`${kind}.T.py`]), { b: true })] });
+  const tag = p => deb ? (AG[p.bucket] || "") + (p.st === "doubt" ? " (doubtful)" : "") + (p.disp === "yes" ? " (disputed)" : "") : (p.msme === "yes" ? "Yes" : "No") + (p.disp === "yes" ? " (disputed)" : "");
+  sorted.forEach((p, i) => X.row({ frame: fr, h: Math.max(RH, hFor(p.name, 34), hFor(p.grp, 18), hFor(tag(p), 13)), cells: [cell(1, i + 1, { al: "center", fmt: "0" }), cell(2, p.name || ""), cell(3, p.grp || ""),
+    cell(4, tag(p), { al: "center" }), cell(5, num(p.cy)), cell(6, num(p.py))] }));
+  X.row({ frame: fr, top: true, bottom: true, cells: [cell(1, "Total", { to: 4, b: true, al: "right" }), cell(5, num(C[`${kind}.T.cy`]), { b: true }), cell(6, num(C[`${kind}.T.py`]), { b: true })] });
 }
-function xlNotes(wb) {
-  const d = dates(S);
-  const X = mkSheet(wb, "Notes", NW, { orient: "portrait", avail: 705, titles: "1:3",
-    margins: { left: 0.45, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } });
-  X.row({ cells: [cell(1, S.info.name, { to: 7, b: true })], h: 15 });
-  X.row({ cells: [cell(1, `Notes forming part of the Financial Statements for the year ended ${d.cy}`, { to: 7, b: true })], h: 15 });
-  X.row({ cells: [cell(5, `(Amount in ${S.info.unit})`, { to: 7, b: true, al: "right" })] });
-  X.body = X.r;
-  X.block(textNote("1", "Brief about the entity", S.info.about)); X.gap();
-  textNote("2", "Significant Accounting Policies", S.info.policies).forEach(r => X.row(r)); X.gap();
-  const ow = S.info.ownerWord || "Partner", fa = k => C[`bs.${k}.cy`], fp = k => C[`bs.${k}.py`];
-  for (const id of NOTE_ORDER) {
-    if (id === "n3") X.block(refNote(NN(id), `${ow}s' Capital Account`, `Refer ${ow.toLowerCase()}-wise schedule in the sheet "Capital Account".`, [
-      ...S.partners.map(p => [p.name || ow, C[`p.${p.id}.close.cy`], C[`p.${p.id}.close.py`]]), ["Total", C["p.T.close.cy"], C["p.T.close.py"], 1]]));
-    else if (id === "n11") X.block(refNote(NN(id), "Fixed Assets", `Refer block-wise schedule in the sheet "Fixed Assets".`, [
-      ["Property, plant and equipment (W.D.V.)", fa("ppe"), fp("ppe")], ["Intangible assets (W.D.V.)", fa("intang"), fp("intang")],
-      ["Capital work-in-progress", fa("cwip"), fp("cwip")], ["Intangible assets under development", fa("iaud"), fp("iaud")],
-      ["Total", fa("ppe") + fa("intang") + fa("cwip") + fa("iaud"), fp("ppe") + fp("intang") + fp("cwip") + fp("iaud"), 1]]));
-    else X.block(noteRows(NOTE_BY[id]));
-    X.gap();
-  }
-  X.row({ h: 12 });
-  X.block(sigRows(2, 6, 7));
+// cover sheet in Excel; the PDF draws its own cover page
+function coverSheet(wb) {
+  const d = FD(), i = S.info;
+  const X = mkSheet(wb, "Cover", [90], { orient: "portrait", avail: 770 });
+  const rows = [["", 60], [`FINANCIAL YEAR ${d.fyShort}`, 18, { b: true, sz: 10 }], ["", 14], [i.name, 36, { b: true, sz: 24, font: "Cambria" }], ["", 10], [i.regLine || "", 16, { sz: 10 }], ["", 120],
+    [i.caFirm ? "Audited" : "", 22, { i: true, sz: 16, font: "Cambria" }], ["Financial Statements", 34, { b: true, sz: 24, font: "Cambria" }], [`For the year ended ${d.long}`, 18, { sz: 11 }], ["", 160],
+    [i.caFirm ? "AUDITORS" : "", 16, { b: true, sz: 9 }], [i.caFirm || "", 22, { b: true, sz: 14, font: "Cambria" }], [i.caFirm ? `Chartered Accountants${i.place ? " · " + i.place : ""}` : "", 16, { sz: 10 }]];
+  for (const [t, h, o] of rows) X.row({ h, cells: [cell(1, t, { ...(o || {}), va: "middle" })] });
+}
+function buildWorkbook(wb) {
+  coverSheet(wb);
+  stmtSheet(wb, "bs");
+  stmtSheet(wb, "pl");
+  notesSheet(wb);
+  capitalSheet(wb);
+  fixedAssetSheet(wb);
+  partySheet(wb, "debtors");
+  partySheet(wb, "creditors");
 }
 
 $("#xlsBtn").addEventListener("click", async () => {
   if (!window.ExcelJS) { toast("The Excel library did not load. Check your connection and reload the page."); return; }
   compute();
   const wb = new ExcelJS.Workbook();
-  wb.creator = "NCE Statement Builder";
   buildWorkbook(wb);
   const buf = await wb.xlsx.writeBuffer();
   await offerFile(safeName() + " - Financial Statements.xlsx", new Blob([buf]));
 });
 
-/* ---------------- PDF export: the Excel layout drawn as A4 HTML pages, then printed ---------------- */
-// HSheet takes the same row specs as XSheet, so the PDF matches the workbook page for page
+/* ---------------- PDF: the same layout drawn as A4 HTML pages ---------------- */
 class HSheet {
   constructor(wb, name, widths, opt) {
-    this.W = widths; this.N = widths.length; this.avail = opt.avail; this.orient = opt.orient;
+    this.name = name; this.W = widths; this.N = widths.length; this.avail = opt.avail; this.orient = opt.orient;
     this.titleRows = opt.titles ? +String(opt.titles).split(":")[1] : 0;
-    this.r = 0; this.used = 0; this.body = 0; this.titles = []; this.pages = [[]];
+    this.r = 0; this.used = 0; this.body = 0; this.titles = []; this.titleH = 0; this.pages = [[]];
     wb.sheets.push(this);
   }
-  pageBreak() { if (this.r > this.body) { this.pages.push([...this.titles]); this.used = 0; } }
+  pageBreak() { if (this.r > this.body) { this.pages.push([...this.titles]); this.used = this.titleH; } }
   row(spec) {
     const h = spec.h || RH;
     if (this.used + h > this.avail) this.pageBreak();
@@ -1591,80 +1744,83 @@ class HSheet {
     for (const c of spec.cells || []) {
       const last = c.to || c.c, x = cells[c.c - 1];
       for (let k = c.c + 1; k <= last; k++) skip.add(k);
-      x.span = last - c.c + 1;
+      x.span = last - c.c + 1; x.last = last;
       x.html = hval(c);
       const isNum = typeof c.v === "number";
       x.st.push(`text-align:${c.al || (isNum ? "right" : "left")}`, `vertical-align:${c.va === "middle" ? "middle" : c.va === "bottom" ? "bottom" : "top"}`);
       if (c.b) x.st.push("font-weight:700"); if (c.i) x.st.push("font-style:italic"); if (c.u) x.st.push("text-decoration:underline");
-      if (c.sz) x.st.push(`font-size:${c.sz}pt`); if (c.ind) x.st.push(`padding-left:${4 + c.ind * 9}pt`);
+      if (c.sz) x.st.push(`font-size:${c.sz}pt`); if (c.ind) x.st.push(`padding-left:${3 + c.ind * 9}pt`);
+      if (c.font === "Cambria") x.st.push("font-family:'Source Serif 4',Cambria,Georgia,serif");
       if (c.box) { x.b.top = x.b.bottom = x.b.left = x.b.right = "solid"; }
       if (c.bt) x.b.top = "solid";
       if (c.bb) x.b.bottom = c.bb === 2 ? "double" : "solid";
-      x.last = last;
     }
     if (spec.frame) {
       const [a, b] = spec.frame.span || [1, this.N];
       const owner = k => { for (let j = k; j >= 1; j--) if (!skip.has(j)) return j; return k; };
-      for (const k of spec.frame.l || []) { const o = owner(k); if (o === k) cells[k - 1].b.left = "solid"; }
-      for (const k of spec.frame.r || []) { const o = owner(k); const x = cells[o - 1]; if ((x.last || o) === k) x.b.right = "solid"; }
+      for (const k of spec.frame.l || []) if (owner(k) === k) cells[k - 1].b.left = "solid";
+      for (const k of spec.frame.r || []) { const o = owner(k); if ((cells[o - 1].last || o) === k) cells[o - 1].b.right = "solid"; }
       for (let k = a; k <= b; k++) if (!skip.has(k)) { if (spec.top) cells[k - 1].b.top ||= "solid"; if (spec.bottom) cells[k - 1].b.bottom ||= "solid"; }
     }
     const tds = cells.map((x, i) => {
       if (skip.has(i + 1)) return "";
-      const bs = ["top", "bottom", "left", "right"].filter(s => x.b[s]).map(s => `border-${s}:${x.b[s] === "double" ? "2.5pt double" : "0.75pt solid"} #000`);
+      const bs = ["top", "bottom", "left", "right"].filter(s => x.b[s]).map(s => `border-${s}:${x.b[s] === "double" ? "2.4pt double" : "0.7pt solid"} #000`);
       return `<td${x.span > 1 ? ` colspan="${x.span}"` : ""} style="${[...x.st, ...bs].join(";")}">${x.html}</td>`;
     }).join("");
     const tr = `<tr style="height:${h}pt">${tds}</tr>`;
     this.pages[this.pages.length - 1].push(tr);
-    if (this.r <= this.titleRows) this.titles.push(tr);
+    if (this.r <= this.titleRows) { this.titles.push(tr); this.titleH = this.used + h; }
     this.used += h;
   }
-  block(rows) {
-    const tot = rows.reduce((a, r) => a + (r.h || RH), 0);
-    if (this.used > 0 && this.used + tot > this.avail && (tot <= this.avail || this.avail - this.used < this.avail * 0.4)) this.pageBreak();
-    rows.forEach(r => this.row(r));
-  }
-  gap(h = 10) { if (this.used > 0 && this.used + h <= this.avail) this.row({ h }); }
+  block(rows) { return XSheet.prototype.block.call(this, rows); }
+  gap(h = 10) { return XSheet.prototype.gap.call(this, h); }
   html() {
     const tot = this.W.reduce((a, b) => a + b, 0);
     const cols = `<colgroup>${this.W.map(w => `<col style="width:${(w / tot * 100).toFixed(3)}%">`).join("")}</colgroup>`;
-    return this.pages.filter(p => p.length).map(p => `<section class="pp ${this.orient}"><table>${cols}${p.join("")}</table></section>`).join("");
+    return this.pages.filter(p => p.length).map(p => {
+      const t = `<table>${cols}${p.join("")}</table>`;
+      return this.orient === "landscape" ? `<section class="pp land"><div class="rot">${t}</div></section>` : `<section class="pp">${t}</section>`;
+    }).join("");
   }
 }
 function hval(c) {
   const v = c.v;
   if (v === undefined || v === null || v === "") return "";
   if (typeof v !== "number") return esc(v).replace(/\n/g, "<br>");
-  if (c.fmt === '0.00"%"') return v.toFixed(2) + "%";
   if (c.fmt === "0.00%") return (v * 100).toFixed(2) + "%";
   if (c.fmt === "0") return String(Math.round(v));
-  if (c.fmt === "General" || c.fmt === "0.##") return String(+v.toFixed(2));
+  if (c.fmt === "0.##") return String(+v.toFixed(2));
   return fmt(v);
 }
-// both writers are built through this, so every layout function works for Excel and for PDF
 function mkSheet(wb, name, widths, opt) { return wb.html ? new HSheet(wb, name, widths, opt) : new XSheet(wb, name, widths, opt); }
-function buildWorkbook(wb) {
-  xlStatement(wb, "bs");
-  xlStatement(wb, "pl");
-  xlNotes(wb);
-  xlCapital(wb);
-  xlFixedAssets(wb);
-  xlParties(wb, "debtors");
-  xlParties(wb, "creditors");
+function coverHTML() {
+  const d = FD(), i = S.info;
+  return `<section class="pp cover"><div class="cv">
+    <div class="cv-fy">FINANCIAL YEAR ${esc(d.fyShort)}</div>
+    <div class="cv-name">${esc(i.name)}</div>
+    <div class="cv-rule"></div>
+    ${i.regLine ? `<div class="cv-reg">${esc(i.regLine)}</div>` : ""}
+    <div class="cv-mid">${i.caFirm ? `<div class="cv-aud">Audited</div>` : ""}<div class="cv-title">Financial Statements</div><div class="cv-for">For the year ended ${esc(d.long)}</div></div>
+    ${i.caFirm ? `<div class="cv-foot"><div class="cv-lab">AUDITORS</div><div class="cv-firm">${esc(i.caFirm)}</div><div class="cv-ca">Chartered Accountants${i.place ? " · " + esc(i.place) : ""}</div></div>` : ""}
+  </div></section>`;
 }
-$("#pdfBtn").addEventListener("click", () => {
+function pdfPages() {
   compute();
   const wb = { html: true, sheets: [] };
-  buildWorkbook(wb);
-  const box = $("#printArea");
-  box.innerHTML = wb.sheets.map(s => s.html()).join("");
-  const prev = document.title;
-  document.title = safeName() + " - Financial Statements";
-  setTimeout(() => {
-    try { window.print(); } catch { toast("Printing is blocked here. Open the website in Safari or Chrome."); }
-    document.title = prev;
-  }, 50);
+  stmtSheet(wb, "bs"); stmtSheet(wb, "pl"); notesSheet(wb); capitalSheet(wb); fixedAssetSheet(wb); partySheet(wb, "debtors"); partySheet(wb, "creditors");
+  return coverHTML() + wb.sheets.map(s => s.html()).join("");
+}
+$("#pdfBtn").addEventListener("click", () => {
+  $("#printArea").innerHTML = pdfPages();
+  setTimeout(() => { try { window.print(); } catch { toast("Printing is blocked here. Open the website in Safari or Chrome."); } }, 60);
 });
+// on-screen Balance Sheet / P&L use the same drawing as the PDF
+function stmtHTML(kind) {
+  compute();
+  const wb = { html: true, sheets: [] };
+  stmtSheet(wb, kind);
+  return wb.sheets[0].pages.map(p => `<table>${`<colgroup>${SW.map(w => `<col style="width:${(w / SW.reduce((a, b) => a + b, 0) * 100).toFixed(3)}%">`).join("")}</colgroup>`}${p.join("")}</table>`).join("");
+}
 
 /* ---------------- sample data ---------------- */
 function sampleState() {
@@ -1692,18 +1848,18 @@ function sampleState() {
   s.text.n5a = "The term loan from HDFC Bank is secured by hypothecation of the firm's vehicles and personal guarantee of the partners. It carries interest at 9.25% p.a. and is repayable in 60 monthly instalments, the last falling due in March 2029.";
   s.text.n5b = "The cash credit from HDFC Bank is secured by hypothecation of stock and book debts and carries interest at 9.75% p.a. It is repayable on demand.";
   s.parties.creditors = [
-    { id: "c1", name: "Havells India Ltd", grp: "Manufacturers", msme: "no", cy: 300000, py: 270000 },
-    { id: "c2", name: "Polycab India Ltd", grp: "Manufacturers", msme: "no", cy: 220000, py: 200000 },
-    { id: "c3", name: "Jyoti Cables", grp: "Local suppliers", msme: "yes", cy: 180000, py: 150000 }];
+    { id: "c1", name: "Havells India Ltd", grp: "Manufacturers", msme: "no", disp: "no", bucket: "y1", bucketPy: "y1", cy: 300000, py: 270000 },
+    { id: "c2", name: "Polycab India Ltd", grp: "Manufacturers", msme: "no", disp: "no", bucket: "nd", bucketPy: "y1", cy: 220000, py: 200000 },
+    { id: "c3", name: "Jyoti Cables", grp: "Local suppliers", msme: "yes", disp: "no", bucket: "nd", bucketPy: "nd", cy: 180000, py: 150000 }];
   V("n10", "a.gst", 46000, 38000); V("n10", "a.tds", 9000, 8000); V("n10", "a.oth", 30000, 25000);
-  V("n8", "a.tax", { st_cy: 65000, st_py: 40000 });
-  V("n13", "unsec.sd", { lt_cy: 100000, lt_py: 100000 }); V("n13", "unsec.prepaid", { st_cy: 12000, st_py: 10000 }); 
+  V("n8b", "a.tax", 65000, 40000);
+  V("n13a", "unsec.sd", 100000, 100000); V("n13b", "unsec.prepaid", 12000, 10000);
   V("n15", "a.sit", 720000, 640000);
   s.parties.debtors = [
-    { id: "d1", name: "Patel Electricals", grp: "Retail dealers", age: "lt6", st: "unsec", cy: 420000, py: 380000 },
-    { id: "d2", name: "Shiv Shakti Traders", grp: "Retail dealers", age: "lt6", st: "unsec", cy: 310000, py: 260000 },
-    { id: "d3", name: "Om Projects Pvt Ltd", grp: "Contractors", age: "lt6", st: "unsec", cy: 250000, py: 220000 },
-    { id: "d4", name: "Ganesh Electric Works", grp: "Contractors", age: "gt6", st: "unsec", cy: 60000, py: 45000 }];
+    { id: "d1", name: "Patel Electricals", grp: "Retail dealers", st: "unsec", disp: "no", bucket: "nd", bucketPy: "m6", cy: 420000, py: 380000 },
+    { id: "d2", name: "Shiv Shakti Traders", grp: "Retail dealers", st: "unsec", disp: "no", bucket: "m6", bucketPy: "m6", cy: 310000, py: 260000 },
+    { id: "d3", name: "Om Projects Pvt Ltd", grp: "Contractors", st: "unsec", disp: "no", bucket: "m6", bucketPy: "nd", cy: 250000, py: 220000 },
+    { id: "d4", name: "Ganesh Electric Works", grp: "Contractors", st: "unsec", disp: "no", bucket: "y1", bucketPy: "y1", cy: 60000, py: 45000 }];
   V("n17", "cce.cur", 0, 0); V("n17", "cce.cash", 38000, 31000); V("n17", "obb.fd12", 300000, 250000);
   V("n18", "a.ind", 9000, 7000);
   const fa = { "Furniture & Fixtures": { open: 170000 }, "Office Equipment": { open: 126000, add1: 25000 }, "Motor Car": { open: 425000 },
@@ -1728,11 +1884,29 @@ function normalize(s) {
   const b = blankState();
   s.info = { ...b.info, ...s.info }; s.vals ||= {}; s.extra ||= {}; s.text ||= {}; s.cwip ||= {}; s.iaud ||= {};
   s.parties ||= {}; s.parties.debtors ||= []; s.parties.creditors ||= [];
+  for (const p of s.parties.debtors) { if (!p.bucket) { p.bucket = p.age === "gt6" ? "y1" : "m6"; p.bucketPy ||= p.bucket; } p.disp ||= "no"; delete p.age; }
+  for (const p of s.parties.creditors) { p.bucket ||= "y1"; p.bucketPy ||= p.bucket; p.disp ||= "no"; }
+  splitLongShort(s, "n8", "n8a", "n8b"); splitLongShort(s, "n13", "n13a", "n13b");
+  s.otherNotes ||= b.otherNotes;
   migrateBorrowings(s); migrateFixedAssets(s, b);
   s.partners ||= []; s.partners.forEach(p => { p.cy ||= {}; p.py ||= {}; }); if (s.allocate === undefined) s.allocate = true;
   return s;
 }
 
+// earlier versions kept provisions and loans in one long-term / short-term grid; give each its own note
+function splitLongShort(s, old, lt, st) {
+  if (!s.vals[old]) return;
+  for (const [rk, v] of Object.entries(s.vals[old])) {
+    ((s.vals[lt] ||= {})[rk] = { cy: num(v.lt_cy), py: num(v.lt_py) });
+    ((s.vals[st] ||= {})[rk] = { cy: num(v.st_cy), py: num(v.st_py) });
+  }
+  for (const k of Object.keys(s.extra)) if (k.startsWith(old + ".")) {
+    const sec = k.slice(old.length + 1);
+    s.extra[lt + "." + sec] = s.extra[k].map(e => ({ ...e })); s.extra[st + "." + sec] = s.extra[k].map(e => ({ ...e })); delete s.extra[k];
+  }
+  if (s.text[old]) { s.text[lt] = s.text[old]; delete s.text[old]; }
+  delete s.vals[old];
+}
 // earlier versions kept borrowings in one ICAI-style grid; split them into lender-wise lines
 function migrateBorrowings(s) {
   const old = s.vals.n5; if (!old) return;

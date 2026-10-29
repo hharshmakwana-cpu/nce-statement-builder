@@ -1,5 +1,5 @@
 // Network first, so a new version shows as soon as it is online; the cache keeps the app working offline.
-const CACHE = "nce-statements-v1";
+const CACHE = "nce-statements-v2";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
@@ -16,6 +16,7 @@ self.addEventListener("fetch", e => {
         if (res.ok || res.type === "opaque") { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
         return res;
       })
-      .catch(() => caches.match(e.request).then(hit => hit || caches.match("./index.html")))
+      // only a page load falls back to the app shell; a missing script or file must fail as itself
+      .catch(() => caches.match(e.request).then(hit => hit || (e.request.mode === "navigate" ? caches.match("./index.html") : Response.error())))
   );
 });
